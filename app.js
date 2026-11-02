@@ -16,13 +16,14 @@ const ROLES = [
 const roleName = r => (ROLES.find(x => x[0] === r) || [0, r])[1];
 const can = p => !!me && String(p).split("+").every(x => (me.perms || []).includes(x));
 const pm = (def, a) => def.perm === "suppliers" ? (a === "view" || can("suppliers.edit")) : can(def.perm + "." + a);
+let accounts = [];
 let me = null, lists = { item_type: [], brand: [], stock_type: [] }, stockItems = [], suppliers = [];
 
 function toast(m) { const t = $("#toast"); t.textContent = m; t.style.display = "block"; setTimeout(() => t.style.display = "none", 3000); }
 const must = r => { if (r.error) { toast(r.error.message); throw r.error; } return r.data; };
 
 // ---- field/table definitions ------------------------------------------------
-const PAY = ["Cash", "M-Pesa", "Bank"];
+const PAY = ["Cash", "M-Pesa", "Bank"], PAYX = [...PAY, "On account"];
 const LEFT_WITH = ["SIM", "Memory card", "Battery", "Charger", "Case"], CONDITION = ["Cracked screen", "Scratches", "Water damage", "Will not power on"];
 const T = {
   repairs: { title: "Repairs", view: "v_repairs", perm: "repairs", table: "repairs", order: "id", print: "jobcard", mpay: "repair",
@@ -39,10 +40,10 @@ const T = {
       ["returned_on", "Date returned", "date"], ["remarks", "Remarks", "text", { full: 1 }]] },
   sales: { title: "Sales", view: "sales_v", perm: "sales", table: "sales", order: "id",
     cols: [["sold_on", "Date"], ["customer", "Customer / receipt"], ["item_name", "Item"], ["qty", "Qty", "n"], ["unit_cost", "Unit cost", "n", "owner"], ["unit_price", "Unit price", "n"],
-      ["total_sales", "Total", "n"], ["profit", "Profit", "n", "owner"], ["payment", "Payment"], ["mpesa_ref", "M-Pesa code"]],
+      ["total_sales", "Total", "n"], ["profit", "Profit", "n", "owner"], ["payment", "Payment"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"]],
     fields: [["sold_on", "Date", "date", { today: 1 }], ["customer", "Customer / receipt no.", "text"], ["item_id", "Item (pick from stock — name and unit cost fill in)", "stock", { full: 1 }],
       ["category", "Category", "list:stock_type"], ["qty", "Qty", "number", { req: 1 }], ["unit_price", "Unit price (KES)", "number", { req: 1 }],
-      ["payment", "Payment method", "select:" + PAY.join()], ["mpesa_ref", "M-Pesa code (if paid by M-Pesa)", "text"], ["cost_new", "Unit cost for an item not in stock (KES)", "number", { owner: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
+      ["payment", "Payment method", "select:" + PAYX.join()], ["account_id", "Credit account (choose when payment is On account)", "account"], ["mpesa_ref", "M-Pesa code (if paid by M-Pesa)", "text"], ["cost_new", "Unit cost for an item not in stock (KES)", "number", { owner: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
   inventory: { title: "Inventory", view: "v_stock", perm: "inventory", table: "inventory_items", order: "code",
     cols: [["code", "Code"], ["description", "Description"], ["stock_type", "Type"], ["qty_received", "Received", "n"], ["qty_sold", "Sold", "n"], ["qty_used", "Used", "n"], ["on_hand", "On hand", "n"],
       ["unit_cost", "Unit cost", "n", "owner"], ["selling_price", "Selling price", "n"], ["stock_value", "Stock value", "n", "owner"], ["supplier", "Supplier"], ["shop_visible", "Online", "yn"], ["status", "Status", "tag"]],
@@ -57,17 +58,17 @@ const T = {
       ["contract_price", "Contract price (KES)", "number"], ["status", "Stage (customer sees this)", "select:Booked,Site visit,Quote sent,Waiting for materials,In progress,Testing,On hold,Completed", { def: "Booked" }], ["completed_on", "Date completed", "date"],
       ["customer_note", "Message to customer (shown on the tracking page)", "text", { full: 1 }], ["sms_optout", "Do NOT send this customer SMS updates", "check"], ["scope", "Scope of work", "text", { full: 1 }], ["remarks", "Remarks (private)", "text", { full: 1 }]] },
   income: { title: "Income", view: "income", perm: "income", table: "income", order: "received_on",
-    cols: [["received_on", "Date"], ["ref", "Customer ID / Job No."], ["description", "Description"], ["amount", "Amount", "n"], ["payment", "Payment"], ["mpesa_ref", "M-Pesa code"], ["income_type", "Type"]],
+    cols: [["received_on", "Date"], ["ref", "Customer ID / Job No."], ["description", "Description"], ["amount", "Amount", "n"], ["payment", "Payment"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"], ["income_type", "Type"]],
     fields: [["received_on", "Date", "date", { today: 1 }], ["ref", "Customer ID / Job No.", "text"], ["description", "Service description", "text", { full: 1 }], ["amount", "Amount (KES)", "number", { req: 1 }],
-      ["payment", "Payment method", "select:" + PAY.join()], ["income_type", "Income type", "select:Repair,Electrical installation,CCTV installation,Other service"], ["mpesa_ref", "M-Pesa code", "text"], ["notes", "Notes", "text", { full: 1 }]] },
+      ["payment", "Payment method", "select:" + PAYX.join()], ["account_id", "Credit account (choose when payment is On account)", "account"], ["income_type", "Income type", "select:Repair,Electrical installation,CCTV installation,Other service"], ["mpesa_ref", "M-Pesa code", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   expenses: { title: "Expenses", view: "expenses", perm: "expenses", table: "expenses", order: "spent_on",
     cols: [["spent_on", "Date"], ["description", "Description"], ["category", "Category"], ["amount", "Amount", "n"], ["payment", "Payment"], ["mpesa_ref", "M-Pesa code"], ["job_no", "Job No."]],
     fields: [["spent_on", "Date", "date", { today: 1 }], ["description", "Description", "text", { full: 1 }], ["category", "Category", "select:Job materials,Labor / Technician,Transport / Logistics,Fuel,Rent,Utilities,Stock purchase,Airtime / Internet,Other"],
       ["amount", "Amount (KES)", "number", { req: 1 }], ["payment", "Payment method", "select:" + PAY.join()], ["mpesa_ref", "M-Pesa code", "text"], ["job_no", "Job No. (optional)", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   services: { title: "Printing & Cyber", view: "services", perm: "services", table: "services", order: "id", quick: 1,
-    cols: [["done_on", "Date"], ["service", "Service"], ["customer", "Customer"], ["qty", "Qty", "n"], ["unit_price", "Price", "n"], ["total", "Total", "n"], ["payment", "Payment"], ["mpesa_ref", "M-Pesa code"]],
+    cols: [["done_on", "Date"], ["service", "Service"], ["customer", "Customer"], ["qty", "Qty", "n"], ["unit_price", "Price", "n"], ["total", "Total", "n"], ["payment", "Payment"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"]],
     fields: [["done_on", "Date", "date", { today: 1 }], ["service", "Service", "service"], ["customer", "Customer (optional)", "text"], ["qty", "Qty (pages, minutes ÷ 30, items)", "number", { req: 1 }],
-      ["unit_price", "Price each (KES)", "number", { req: 1 }], ["payment", "Payment method", "select:" + PAY.join()], ["mpesa_ref", "M-Pesa code (if paid by M-Pesa)", "text"], ["notes", "Notes", "text", { full: 1 }]] },
+      ["unit_price", "Price each (KES)", "number", { req: 1 }], ["payment", "Payment method", "select:" + PAYX.join()], ["account_id", "Credit account (choose when payment is On account)", "account"], ["mpesa_ref", "M-Pesa code (if paid by M-Pesa)", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   enquiries: { title: "Website enquiries", view: "enquiries", perm: "orders", table: "enquiries", order: "id",
     cols: [["created_at", "Received", "dt"], ["name", "Name"], ["phone", "Phone"], ["topic", "About"], ["message", "Message"], ["status", "Status"], ["source", "From"]],
     fields: [["name", "Name", "text", { req: 1 }], ["phone", "Phone", "text", { req: 1 }], ["topic", "About", "text"], ["message", "Message", "text", { full: 1 }],
@@ -76,7 +77,7 @@ const T = {
     cols: [["name", "Supplier"], ["contact_person", "Contact person"], ["phone", "Phone"], ["location", "Location"], ["supplies", "What they supply"]],
     fields: [["name", "Supplier name", "text", { req: 1 }], ["contact_person", "Contact person", "text"], ["phone", "Phone", "text"], ["location", "Location", "text"], ["supplies", "What they supply", "text", { full: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
 };
-const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
+const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
   ["docs", "Quote / Invoice / Receipt", "docs.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
   ["mpay", "M-Pesa checkout", "mpay.use"], ["sms", "SMS messages", "sms.manage"], ["eod", "End of day", "eod.view"], ["monthly", "Monthly report", "reports.view+costs.view"], ["summary", "Year summary", "reports.view+costs.view"],
   ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["users", "Users & roles", "users.manage"]];
@@ -93,7 +94,8 @@ function widget([k, l, t, o = {}], v) {
   else if (t === "image") return `<label class="${cls}">${esc(l)}<input name="${k}" value="${esc(val)}" placeholder="https://…" autocomplete="off"><span style="display:flex;gap:10px;align-items:center;margin-top:6px"><input type="file" accept="image/*" data-img="${k}" style="flex:1"><img alt="" data-prev="${k}" src="${esc(val)}" style="height:44px;width:44px;object-fit:cover;border-radius:8px;${val ? "" : "display:none"}"></span><small data-imsg="${k}" style="color:var(--mut)"></small></label>`;
   else if (t.startsWith("multi:")) { const have = Array.isArray(v) ? v : []; return `<fieldset class="full multi"><legend>${esc(l)}</legend>${t.slice(6).split("|").map(x => `<label><input type="checkbox" name="${k}" value="${esc(x)}" ${have.includes(x) ? "checked" : ""}> ${esc(x)}</label>`).join("")}</fieldset>`; }
   else if (t === "date") inner = `<input name="${k}" type="date" value="${esc(val)}" ${req}>`;
-  else if (t.startsWith("select:")) { const sv = val || o.def || ""; inner = `<select name="${k}">${o.def ? "" : `<option value=""></option>`}${t.slice(7).split(",").map(x => `<option ${x === sv ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`; }
+  else if (t === "account") { if (!can("accounts.view")) return ""; inner = `<select name="${k}"><option value=""></option>${accounts.filter(a => a.active || String(a.id) === String(val)).map(a => `<option value="${a.id}" ${String(a.id) === String(val) ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select>`; }
+  else if (t.startsWith("select:")) { const sv = val || o.def || ""; if (!can("accounts.view")) t = t.replace(",On account", ""); inner = `<select name="${k}">${o.def ? "" : `<option value=""></option>`}${t.slice(7).split(",").map(x => `<option ${x === sv ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`; }
   else if (t.startsWith("list:")) { const id = "dl_" + k; inner = `<input name="${k}" list="${id}" value="${esc(val)}" ${req} autocomplete="off"><datalist id="${id}">${lists[t.slice(5)].map(x => `<option value="${esc(x.value)}">`).join("")}</datalist>`; }
   else if (t === "stock") inner = `<select name="${k}"><option value=""></option>${stockItems.map(i => `<option value="${i.id}" ${String(i.id) === String(val) ? "selected" : ""}>${esc(i.code)} – ${esc(i.description)} (${i.on_hand} in stock)</option>`).join("")}</select>`;
   else if (t === "service") inner = `<select name="${k}" required data-svc><option value=""></option>${catalog.map(c => `<option value="${esc(c.name)}" data-price="${c.default_price}" ${c.name === val ? "selected" : ""}>${esc(c.name)} (${esc(c.unit)})</option>`).join("")}</select>`;
@@ -104,10 +106,11 @@ function readForm(form, fields) {
   const out = {};
   for (const [k, , t, o = {}] of fields) {
     if (o.owner && !can("costs.view")) continue;
+    if (t === "account" && !form.elements[k]) continue;
     if (t === "check") { out[k] = form.elements[k].checked; continue; }
     if (t.startsWith("multi:")) { out[k] = [...form.querySelectorAll(`input[name="${k}"]:checked`)].map(x => x.value); continue; }
     const raw = form.elements[k].value.trim();
-    out[k] = raw === "" ? null : (t === "number" || t === "stock" || t === "supplier") ? Number(raw) : raw;
+    out[k] = raw === "" ? null : (t === "number" || t === "stock" || t === "supplier" || t === "account") ? Number(raw) : raw;
   }
   return out;
 }
@@ -124,6 +127,10 @@ async function openForm(key, row) {
     const data = readForm(f, def.fields);
     const checks = key === "repairs" ? { left_with: data.left_with || [], condition: data.condition || [] } : null;
     if (checks) { delete data.left_with; delete data.condition; }
+    if (def.fields.some(f => f[2] === "account") && "account_id" in data) {
+      if (data.payment === "On account" && !data.account_id) return toast("Choose the credit account this is billed to.");
+      if (data.payment !== "On account") data.account_id = null;
+    }
     const costVal = key === "inventory" ? data.unit_cost : key === "sales" ? data.cost_new : undefined;
     delete data.unit_cost; delete data.cost_new;
     if (key === "repairs") { data.part1_qty ??= 1; data.part2_qty ??= 1; }
@@ -164,11 +171,11 @@ async function tablePage(key) {
   const def = T[key];
   const rows = must(await db.from(def.view).select("*").order(def.order, { ascending: false }).limit(500)) || [];
   window.__rows = rows;
-  const cols = def.cols.filter(c => c[3] !== "owner" || can("costs.view"));
+  const cols = def.cols.filter(c => (c[3] !== "owner" || can("costs.view")) && (c[2] !== "acct" || can("accounts.view")));
   const head = cols.map(c => `<th>${esc(c[1])}</th>`).join("") + "<th></th>";
   const body = rows.map((r, i) => `<tr class="${r.status === "REORDER" ? "low" : ""}">${cols.map(([k, , t]) => {
     const v = r[k]; if (t === "tag") return `<td><span class="tag ${v === "REORDER" || v === "In shop" ? "bad" : "ok"}">${esc(v)}</span></td>`;
-    return `<td class="${t === "n" ? "n" : ""}">${t === "n" ? kes(v) : t === "dt" ? esc(String(v || "").replace("T", " ").slice(0, 16)) : t === "yn" ? (v ? "Yes" : "") : esc(v)}</td>`; }).join("")}
+    return `<td class="${t === "n" ? "n" : ""}">${t === "n" ? kes(v) : t === "dt" ? esc(String(v || "").replace("T", " ").slice(0, 16)) : t === "yn" ? (v ? "Yes" : "") : t === "acct" ? esc(acctName(v)) : esc(v)}</td>`; }).join("")}
     <td>${pm(def, "edit") ? `<button class="btn sm" data-edit="${i}">Edit</button>` : ""} ${def.print ? `<button class="btn sm pbtn" data-print="${i}">Print card</button>` : ""}
     ${def.mpay && can("mpay.use") ? `<button class="btn sm" style="background:#12b76a" data-pay="${i}">M-Pesa</button>` : ""}${def.mpay === "repair" ? ` <button class="btn sm wabtn" data-wa="${i}">Send tracking link</button>` : ""}
     ${pm(def, "delete") ? `<button class="btn sm warn" data-del="${i}">Delete</button>` : ""}</td></tr>`).join("");
@@ -283,13 +290,151 @@ async function dashboard() {
   const pay = sm ? ["cash_in", "mpesa_in", "bank_in"].map((f, i) => ({ n: ["Cash", "M-Pesa", "Bank"][i], c: ["#0d6eae", "#12b76a", "#ff914d"][i], v: (sm.months || []).reduce((s, m) => s + Number(m[f] || 0), 0) })) : null;
   $("#view").innerHTML = `<div class="hero"><div class="row1"><img src="logo.png" alt="" width="64" height="64"><div><h2>${hi}${first ? ", " + esc(first) : ""}</h2><p>${esc(new Date().toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))} · ${esc(roleName(me.role))}</p><span class="tagline">${BRAND.TAGLINE}</span></div></div></div>
     <div class="bar"><label>Year <input id="yr" type="number" value="${yr}" style="width:100px"></label></div>
-    <div class="cards">${k("Repairs still in shop", d.in_shop, "repairs")}${k("Jobs in progress", d.jobs_open, "jobs")}${k("Items to reorder", d.reorder, "inventory", "o")}${d.orders_open != null ? k("Online orders to handle", d.orders_open, "orders", d.orders_open ? "o" : "") : ""}${d.enquiries_new ? k("New website enquiries", d.enquiries_new, "enquiries", "o") : ""}</div>
+    <div class="cards">${k("Repairs still in shop", d.in_shop, "repairs")}${k("Jobs in progress", d.jobs_open, "jobs")}${k("Items to reorder", d.reorder, "inventory", "o")}${d.orders_open != null ? k("Online orders to handle", d.orders_open, "orders", d.orders_open ? "o" : "") : ""}${d.accounts_owed != null && d.accounts_owed > 0 ? k("Owed by credit accounts", d.accounts_owed, "accounts", "o", 1) : ""}${d.chat_waiting ? k("Live chats waiting", d.chat_waiting, "chat", "o") : ""}${d.enquiries_new ? k("New website enquiries", d.enquiries_new, "enquiries", "o") : ""}</div>
     ${d.owner ? `<div class="cards">${k("Total income (year)", d.income, "income", "g", 1)}${k("Total expenses (year)", d.expenses, "expenses", "o", 1)}${k("Cash profit (year)", d.profit, "profit", "g", 1)}${k("Owed by clients", d.owed, "owed", "o", 1)}${k("Customer deposits held", d.deposits_held, "deposit", "", 1)}</div>`
       : `<p style="color:var(--mut)">Money totals are shown only to roles that may see reports.</p>`}
     <div class="charts">${pipe ? `<div class="panel"><h3>Repairs in the shop, by stage</h3>${pipe}</div>` : ""}${sm ? `<div class="panel"><h3>Money received by payment method (${yr})</h3>${BRAND.donut(pay, "Received")}</div>` : ""}</div>
     ${sm ? `<div class="panel"><h3>Income and expenses by month (${yr})</h3><div style="overflow-x:auto"><div style="min-width:560px;max-width:820px;margin:auto">${BRAND.bars(sm.months || [])}</div></div></div>` : ""}
     <h3 style="margin:6px 0 8px">Go to</h3><div class="tiles">${navFor().slice(1).map(([k2, l]) => `<a class="tile" href="#${k2}">${BRAND.icon(k2, 20)}${esc(l)}</a>`).join("")}</div>`;
   $("#yr").onchange = e => { sessionStorage.setItem("yr", e.target.value); route(); };
+}
+
+// ---- credit accounts (customers who pay at the end of the month) ---------------------------
+const acctNo = id => "ACC-" + String(id).padStart(4, "0");
+const acctName = id => { if (id == null || id === "") return ""; const a = accounts.find(x => String(x.id) === String(id)); return a ? a.name : acctNo(id); };
+const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+async function accountsPage() {
+  const rows = must(await db.from("credit_balances").select("*").order("name")) || [], edit = can("accounts.edit");
+  const owed = rows.reduce((s, r) => s + Math.max(Number(r.balance), 0), 0), over = rows.reduce((s, r) => s + Math.max(Number(r.overdue), 0), 0);
+  let showAll = sessionStorage.getItem("acall") === "1";
+  const draw = () => {
+    const q = ($("#aq") ? $("#aq").value : "").toLowerCase(), list = rows.filter(r => (showAll || r.active || Number(r.balance) !== 0) && (!q || (r.name + r.phone + r.contact_person + r.acc_no).toLowerCase().includes(q)));
+    $("#atb").innerHTML = list.map(r => `<tr class="${r.active ? "" : "low"}"><td><b>${esc(r.name)}</b><br><small>${esc(r.acc_no)}${r.active ? "" : " · switched off"}</small></td><td>${esc(r.contact_person || "")}<br><small>${esc(r.phone || "")}</small></td>
+      <td class="n"><b>${kes(r.balance)}</b></td><td class="n">${Number(r.overdue) > 0 ? `<span class="tag bad">${kes(r.overdue)}</span>` : ""}</td><td class="n">${Number(r.credit_limit) ? kes(r.credit_limit) : "none"}</td><td>${esc(r.last_payment || "")}</td>
+      <td><button class="btn sm" data-st="${r.id}">Statement</button> ${edit ? `<button class="btn sm" style="background:#12b76a" data-rc="${r.id}">Receive payment</button> <button class="btn sm ghost" data-ch="${r.id}">Charge</button> <button class="btn sm ghost" data-ed="${r.id}">Edit</button>` : ""}</td></tr>`).join("")
+      || `<tr><td colspan="7"><div class="empty">${BRAND.emptyArt(130)}No credit accounts yet. Press “+ New account” for a customer who pays at month end.</div></td></tr>`;
+  };
+  $("#view").innerHTML = `<h2>Credit accounts</h2><p style="color:var(--mut);margin-top:0">For customers billed at the end of the month. Choose <b>On account</b> as the payment method when you record a sale, printing/cyber entry or repair payment, or use <b>Charge</b> below. Open <b>Statement</b> at month end to print or SMS it, and use <b>Receive payment</b> when they pay.</p>
+    <div class="cards"><div class="card"><small>Total owed to you</small><b>KES ${kes(owed)}</b></div><div class="card"><small>Older than 30 days</small><b>KES ${kes(over)}</b></div><div class="card"><small>Accounts</small><b>${rows.filter(r => r.active).length}</b></div></div>
+    <div class="bar">${edit ? `<button class="btn" id="anew">+ New account</button><button class="btn ghost" id="asms">SMS balance reminders</button>` : ""}<input id="aq" placeholder="Search…" style="max-width:240px"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="aall" ${showAll ? "checked" : ""} style="width:auto"> Show switched-off</label></div>
+    <div class="wrap"><table><thead><tr><th>Account</th><th>Contact</th><th>Balance (KES)</th><th>Over 30 days</th><th>Limit</th><th>Last paid</th><th></th></tr></thead><tbody id="atb"></tbody></table></div>`;
+  draw(); $("#aq").oninput = draw; $("#aall").onchange = e => { showAll = e.target.checked; sessionStorage.setItem("acall", showAll ? "1" : "0"); draw(); };
+  const byId = id => rows.find(r => String(r.id) === String(id));
+  if ($("#anew")) $("#anew").onclick = () => accountForm(null);
+  if ($("#asms")) $("#asms").onclick = async () => { if (!confirm("Send every account that owes money an SMS with its balance?")) return; const r = await db.rpc("account_send_statements", {}); if (r.error) return toast(r.error.message); toast(`${r.data.queued} reminder(s) queued`); };
+  $("#atb").onclick = e => { const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.st) statementDialog(byId(b.dataset.st)); if (b.dataset.rc) receiveDialog(byId(b.dataset.rc)); if (b.dataset.ch) chargeDialog(byId(b.dataset.ch)); if (b.dataset.ed) accountForm(byId(b.dataset.ed)); };
+}
+function accountForm(a) {
+  const f = $("#dlgForm"), dlg = $("#dlg");
+  f.innerHTML = `<h2>${a ? "Edit" : "New"} credit account</h2><div class="grid">
+    <label class="full">Customer / business name<input name="name" value="${esc(a?.name || "")}" required></label><label>Contact person<input name="contact_person" value="${esc(a?.contact_person || "")}"></label>
+    <label>Phone (for SMS)<input name="phone" value="${esc(a?.phone || "")}" inputmode="tel"></label><label>Email<input name="email" value="${esc(a?.email || "")}"></label><label>Credit limit (KES, 0 = no limit)<input name="credit_limit" type="number" min="0" step="1" value="${Number(a?.credit_limit || 0)}"></label>
+    <label class="full">Address<input name="address" value="${esc(a?.address || "")}"></label><label class="full">Notes (private)<input name="notes" value="${esc(a?.notes || "")}"></label>
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="active" ${!a || a.active ? "checked" : ""} style="width:auto"> Account is active (can be charged)</label>
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="sms_optout" ${a?.sms_optout ? "checked" : ""} style="width:auto"> Do NOT send this customer SMS</label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements;
+    const d = { name: el.name.value.trim(), contact_person: el.contact_person.value.trim() || null, phone: el.phone.value.trim() || null, email: el.email.value.trim() || null, address: el.address.value.trim() || null,
+      notes: el.notes.value.trim() || null, credit_limit: Number(el.credit_limit.value || 0), active: el.active.checked, sms_optout: el.sms_optout.checked };
+    const r = a ? await db.from("credit_accounts").update(d).eq("id", a.id).select("id") : await db.from("credit_accounts").insert(d).select("id"); if (r.error) return toast(r.error.message);
+    dlg.close(); toast("Saved"); await refreshLookups(); route(); };
+  dlg.showModal();
+}
+function receiveDialog(a) {
+  const f = $("#dlgForm"), dlg = $("#dlg");
+  f.innerHTML = `<h2>Receive payment – ${esc(a.name)}</h2><p style="margin-top:0">Balance now <b>KES ${kes(a.balance)}</b>. This reduces the account balance. It is counted as money received on the day you enter it.</p><div class="grid">
+    <label>Amount received (KES)<input name="amount" type="number" min="1" step="any" value="${Math.max(Math.floor(a.balance), 0) || ""}" required></label><label>Paid by<select name="method"><option>Cash</option><option>M-Pesa</option><option>Bank</option></select></label>
+    <label>M-Pesa code / bank reference<input name="ref" autocomplete="off"></label><label>Date<input name="date" type="date" value="${iso(new Date())}"></label><label class="full">Note<input name="note" placeholder="For example: October statement"></label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save payment</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements;
+    const r = await db.rpc("account_receive", { p_account: a.id, p_amount: Number(el.amount.value), p_method: el.method.value, p_ref: el.ref.value.trim().toUpperCase().replace(/\s+/g, "") || null, p_date: el.date.value || null, p_note: el.note.value.trim() || null });
+    if (r.error) return toast(r.error.message); dlg.close(); toast("Payment recorded. New balance KES " + kes(r.data.balance)); route(); };
+  dlg.showModal();
+}
+function chargeDialog(a) {
+  const f = $("#dlgForm"), dlg = $("#dlg");
+  f.innerHTML = `<h2>Charge to ${esc(a.name)}</h2><p style="margin-top:0">Two ways: put the unpaid balance of a repair or field job on the account, or add any other charge by hand. (Sales and printing/cyber entries go on the account when you choose <b>On account</b> as the payment method.)</p><div class="grid">
+    <label class="full"><b>Repair or job number</b> (for example JC-0012 or J-004)<input name="ref" placeholder="JC-0012" autocomplete="off"></label>
+    <p class="full" style="margin:0;color:var(--mut)">— or, a manual charge —</p>
+    <label>Amount (KES)<input name="amount" type="number" min="1" step="any"></label><label>Date<input name="date" type="date" value="${iso(new Date())}"></label><label class="full">What it is for<input name="desc" placeholder="For example: Router configuration"></label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Charge</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements, ref = el.ref.value.trim();
+    const r = ref ? await db.rpc("account_charge_ref", { p_account: a.id, p_ref: ref }) : await db.rpc("account_charge", { p_account: a.id, p_amount: Number(el.amount.value), p_description: el.desc.value, p_date: el.date.value || null });
+    if (r.error) return toast(r.error.message); dlg.close(); toast(ref ? `${ref.toUpperCase()} charged: KES ${kes(r.data.amount)}` : "Charge added"); route(); };
+  dlg.showModal();
+}
+async function statementDialog(a) {
+  const now = new Date(); let from = iso(new Date(now.getFullYear(), now.getMonth(), 1)), to = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  const f = $("#dlgForm"), dlg = $("#dlg");
+  const load = async () => { const r = await db.rpc("account_statement", { p_account: a.id, p_from: from, p_to: to }); if (r.error) { toast(r.error.message); return null; } return r.data; };
+  const draw = async () => {
+    const s = await load(); if (!s) return;
+    f.innerHTML = `<h2>Statement – ${esc(a.name)} <small>${esc(a.acc_no)}</small></h2><div class="bar"><label>From <input name="from" type="date" value="${from}"></label><label>To <input name="to" type="date" value="${to}"></label>
+      <button class="btn sm ghost" value="month" formnovalidate>This month</button><button class="btn sm ghost" value="last" formnovalidate>Last month</button></div>
+      <div class="cards"><div class="card"><small>Brought forward</small><b>${kes(s.opening)}</b></div><div class="card"><small>Charges</small><b>${kes(s.charges)}</b></div><div class="card"><small>Payments</small><b>${kes(s.payments)}</b></div><div class="card"><small>Balance due</small><b>KES ${kes(s.closing)}</b></div></div>
+      <div class="wrap"><table><thead><tr><th>Date</th><th>Details</th><th>Charge</th><th>Payment</th><th>Balance</th></tr></thead><tbody>${s.lines.map(l => `<tr><td>${esc(l.date)}</td><td>${esc([l.ref, l.description, l.kind === "payment" ? (l.method || "") + (l.mpesa_ref ? " " + l.mpesa_ref : "") : ""].filter(Boolean).join(" · "))}</td>
+        <td class="n">${l.amount > 0 ? kes(l.amount) : ""}</td><td class="n">${l.amount < 0 ? kes(-l.amount) : ""}</td><td class="n">${kes(l.balance)}</td></tr>`).join("") || `<tr><td colspan="5">Nothing in this period.</td></tr>`}</tbody></table></div>
+      <div class="bar" style="margin-top:14px"><button class="btn" value="print" formnovalidate>Print / PDF</button>${can("accounts.edit") && a.phone ? `<button class="btn ghost" value="sms" formnovalidate>SMS balance reminder</button><button class="btn wabtn" value="wa" formnovalidate>WhatsApp</button>` : ""}<button class="btn ghost" value="cancel" formnovalidate>Close</button></div>`;
+    f.onsubmit = async e => { const v = e.submitter && e.submitter.value; if (v === "cancel" || !v) return; e.preventDefault();
+      if (v === "month" || v === "last") { const d = new Date(), m = v === "last" ? d.getMonth() - 1 : d.getMonth(); from = iso(new Date(d.getFullYear(), m, 1)); to = iso(new Date(d.getFullYear(), m + 1, 0)); return draw(); }
+      if (v === "print") return printHtml(statementHtml(s), `${a.acc_no} Statement ${s.to}.pdf`);
+      if (v === "sms") { const r = await db.rpc("account_send_statements", { p_account: a.id }); return r.error ? toast(r.error.message) : toast(r.data.queued ? "SMS queued" : "Nothing owed, so no SMS was sent"); }
+      if (v === "wa") { const ph = String(a.phone || "").replace(/\D/g, "").replace(/^0/, "254"); const msg = `Hello ${a.contact_person || a.name}, your ${SHOP.name} account ${a.acc_no} balance is KES ${kes(s.closing)} as at ${s.to}. Please pay by M-Pesa or at the shop. ${SHOP.phone}`; window.open("https://wa.me/" + ph + "?text=" + encodeURIComponent(msg), "_blank"); } };
+    f.elements.from.onchange = e => { from = e.target.value; draw(); }; f.elements.to.onchange = e => { to = e.target.value; draw(); };
+  };
+  await draw(); dlg.showModal();
+}
+function statementHtml(s) {
+  const a = s.account;
+  return head("STATEMENT OF ACCOUNT", a.acc_no) + kv([["Customer", a.name], ["Contact", [a.contact_person, a.phone].filter(Boolean).join(" · ")], ["Address", a.address], ["Period", `${s.from} to ${s.to}`]]) +
+    `<table style="margin-top:10px"><thead><tr><th>Date</th><th>Details</th><th>Charge (KES)</th><th>Payment (KES)</th><th>Balance (KES)</th></tr></thead><tbody>
+    <tr><td></td><td><i>Balance brought forward</i></td><td></td><td></td><td>${kes(s.opening)}</td></tr>${s.lines.map(l => `<tr><td>${esc(l.date)}</td><td>${esc([l.ref, l.description, l.kind === "payment" ? (l.method || "") + (l.mpesa_ref ? " " + l.mpesa_ref : "") : ""].filter(Boolean).join(" · "))}</td>
+    <td>${l.amount > 0 ? kes(l.amount) : ""}</td><td>${l.amount < 0 ? kes(-l.amount) : ""}</td><td>${kes(l.balance)}</td></tr>`).join("")}
+    <tr><th colspan="2" align="right">Totals for the period</th><th>${kes(s.charges)}</th><th>${kes(s.payments)}</th><th></th></tr><tr><th colspan="4" align="right">BALANCE DUE (KES)</th><th>${kes(s.closing)}</th></tr></tbody></table>
+    <p>Please pay by M-Pesa or at our shop and quote ${esc(a.acc_no)}. Questions? Call ${SHOP.phone}. Thank you for your business.</p>`;
+}
+
+// ---- live chat with website visitors ---------------------------------------------------------
+let chatAway = (() => { try { return localStorage.getItem("fk_away") === "1"; } catch (_) { return false; } })();
+async function chatBeat() {
+  if (!me || !can("chat.use")) return;
+  const r = await db.rpc("chat_heartbeat", { p_available: !chatAway }); if (r.error || !r.data) return;
+  const a = document.querySelector('#nav a[data-k="chat"]'); if (!a) return;
+  let b = a.querySelector(".nb"); const n = Number(r.data.waiting || 0);
+  if (!b) { b = document.createElement("span"); b.className = "nb"; b.style.cssText = "margin-left:auto;background:#e5484d;color:#fff;border-radius:10px;padding:0 7px;font-size:12px;display:none"; a.appendChild(b); }
+  b.textContent = n; b.style.display = n ? "" : "none";
+  if (n > (window.__chatN || 0) && location.hash !== "#chat") toast("A website visitor is waiting in Live chat");
+  window.__chatN = n;
+}
+async function chatPage() {
+  let cur = null, last = 0, shown = [];
+  $("#view").innerHTML = `<h2>Live chat</h2><p style="color:var(--mut);margin-top:0">Visitors on the website can chat with you while you are <b>available</b>. When nobody is available their message is saved as an enquiry instead. Stay on this page or keep the app open to be counted as online.</p>
+    <div class="bar"><button class="btn" id="cav"></button><span id="cstat" style="color:var(--mut)"></span></div>
+    <div style="display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:12px" id="cgrid"><div class="card" style="padding:0;max-height:62vh;overflow:auto" id="cinbox"></div>
+    <div class="card" style="display:flex;flex-direction:column;height:62vh;padding:0"><div id="chead" style="padding:10px 14px;border-bottom:1px solid var(--line,#e5e7eb);min-height:44px"><span style="color:var(--mut)">Choose a chat on the left.</span></div>
+    <div id="cmsgs" style="flex:1;overflow:auto;padding:12px 14px"></div><form id="cform" class="bar" style="padding:10px 14px;margin:0;border-top:1px solid var(--line,#e5e7eb)" hidden><input name="m" placeholder="Type your reply…" autocomplete="off" style="flex:1" maxlength="1000"><button class="btn">Send</button><button class="btn ghost" type="button" id="cclose"></button></form></div></div>`;
+  if (innerWidth < 760) $("#cgrid").style.gridTemplateColumns = "1fr";
+  const setAv = () => { $("#cav").textContent = chatAway ? "You are AWAY – tap to become available" : "You are AVAILABLE – tap to go away"; $("#cav").style.background = chatAway ? "#667085" : "#12b76a"; };
+  setAv(); $("#cav").onclick = async () => { chatAway = !chatAway; try { localStorage.setItem("fk_away", chatAway ? "1" : "0"); } catch (_) {} setAv(); await chatBeat(); };
+  const bubble = m => `<div style="margin:6px 0;display:flex;justify-content:${m.sender === "staff" ? "flex-end" : m.sender === "system" ? "center" : "flex-start"}"><div style="max-width:78%;padding:8px 11px;border-radius:12px;font-size:14px;${m.sender === "staff" ? "background:#0d6eae;color:#fff" : m.sender === "system" ? "background:#f2f4f7;color:#667085;font-size:12px" : "background:#eef2f6"}">${m.sender === "staff" ? `<small style="opacity:.8">${esc(m.name || "")}</small><br>` : ""}${esc(m.body)}<br><small style="opacity:.6">${esc(String(m.at).replace("T", " ").slice(11, 16))}</small></div></div>`;
+  const inbox = async () => {
+    const r = await db.rpc("chat_inbox"); if (r.error) return; const list = r.data || [];
+    $("#cinbox").innerHTML = list.map(t => `<div data-t="${t.id}" style="padding:10px 14px;border-bottom:1px solid var(--line,#eee);cursor:pointer;${cur === t.id ? "background:#eef6fc" : ""}"><b>${esc(t.name)}</b> ${t.unread ? `<span class="tag bad">new</span>` : ""}${t.status === "Closed" ? ` <span class="tag">closed</span>` : ""}<br><small style="color:var(--mut)">${esc(t.last || "")}</small><br><small style="color:var(--mut)">${esc(String(t.last_at).replace("T", " ").slice(5, 16))}${t.assigned ? " · " + esc(t.assigned) : ""}</small></div>`).join("") || `<div class="empty" style="padding:20px">No chats yet.</div>`;
+    $("#cstat").textContent = `${list.filter(t => t.status === "Open").length} open`;
+  };
+  const open = async (id, fresh) => {
+    if (fresh) { cur = id; last = 0; shown = []; $("#cmsgs").innerHTML = ""; }
+    const r = await db.rpc("chat_open", { p_id: id, p_after: last }); if (r.error) return toast(r.error.message); const d = r.data;
+    if (fresh) { $("#chead").innerHTML = `<b>${esc(d.name)}</b> ${d.phone ? `· <a href="tel:${esc(d.phone)}">${esc(d.phone)}</a>` : ""} <small style="color:var(--mut)">${d.page ? "· on " + esc(d.page) : ""}</small>`; $("#cform").hidden = false; $("#cclose").textContent = d.status === "Closed" ? "Reopen" : "Close chat"; $("#cclose").dataset.s = d.status; }
+    if (d.messages.length) { d.messages.forEach(m => { last = Math.max(last, m.id); }); $("#cmsgs").insertAdjacentHTML("beforeend", d.messages.map(bubble).join("")); $("#cmsgs").scrollTop = 1e9; }
+  };
+  $("#cinbox").onclick = async e => { const t = e.target.closest("[data-t]"); if (!t) return; await open(Number(t.dataset.t), true); inbox(); };
+  $("#cform").onsubmit = async e => { e.preventDefault(); const m = e.target.m.value.trim(); if (!m || !cur) return; e.target.m.value = "";
+    const r = await db.rpc("chat_reply", { p_id: cur, p_body: m }); if (r.error) return toast(r.error.message); await open(cur, false); inbox(); };
+  $("#cclose").onclick = async () => { if (!cur) return; const to = $("#cclose").dataset.s === "Closed" ? "Open" : "Closed"; const r = await db.rpc("chat_set_status", { p_id: cur, p_status: to }); if (r.error) return toast(r.error.message); await open(cur, true); inbox(); };
+  await inbox(); chatBeat();
+  (window.__t = window.__t || []).push(setInterval(async () => { if (!document.hidden) { inbox(); if (cur) open(cur, false); } }, 4000));
 }
 
 // ---- lists ------------------------------------------------------------------
@@ -801,17 +946,18 @@ async function refreshLookups() {
   lists = { item_type: li.filter(x => x.kind === "item_type"), brand: li.filter(x => x.kind === "brand"), stock_type: li.filter(x => x.kind === "stock_type") };
   stockItems = must(await db.from("v_stock").select("id,code,description,on_hand").order("code")) || [];
   suppliers = must(await db.from("suppliers").select("id,name").order("name")) || [];
+  accounts = can("accounts.view") ? (must(await db.from("credit_accounts").select("id,name,active,credit_limit").order("name")) || []) : [];
   catalog = (must(await db.from("service_catalog").select("*").order("name")) || []).filter(c => c.active !== false);
 }
 async function route() {
   const k = location.hash.slice(1) || "dashboard";
   document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("on", a.dataset.k === k));
-  $("#view").onclick = $("#view").onsubmit = null;
+  $("#view").onclick = $("#view").onsubmit = null; (window.__t || []).forEach(clearInterval); window.__t = [];
   const nv = NAV.find(n => n[0] === k) || (T[k] && [k, 0, T[k].perm + ".view"]);
   if (nv && nv[2] && !can(nv[2]) && !(k === "suppliers")) { $("#view").innerHTML = `<h2>Not allowed</h2><p>Your role (${esc(roleName(me.role))}) does not include this page. Ask the owner if you need it.</p>`; return; }
   const decorate = () => { const h = document.querySelector("#view > h2"); if (h) { const w = document.createElement("div"); w.className = "pagehead"; w.innerHTML = BRAND.icon(k, 22); h.replaceWith(w); w.appendChild(h); } };
   try { if (k === "dashboard") await dashboard(); else if (k === "lists") await listsPage(); else if (k === "docs") await docsPage(); else if (k === "eod") await eodPage(); else if (k === "monthly") await monthlyPage(); else if (k === "summary") await summaryPage();
-    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
+    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
 }
 async function start() {
   const { data: { session } } = await db.auth.getSession();
@@ -825,6 +971,7 @@ async function start() {
   $("#who").textContent = `${me.full_name || session.user.email} · ${roleName(me.role)}`;
   $("#nav").innerHTML = navFor().map(([k, l]) => `<a href="#${k}" data-k="${k}">${BRAND.icon(k, 17)}${esc(l)}</a>`).join("");
   await refreshLookups(); route();
+  clearInterval(window.__beat); if (can("chat.use")) { chatBeat(); window.__beat = setInterval(chatBeat, 30000); }
 }
 let lastLoginPw = "";
 // shown instead of the app while the owner's temporary password / sign-in link is still the only thing they have
@@ -845,7 +992,7 @@ $("#gateForm").onsubmit = async e => { e.preventDefault(); const f = e.target, m
 $("#gateOut").onclick = async () => { await db.auth.signOut(); lastLoginPw = ""; start(); };
 $("#loginForm").onsubmit = async e => { e.preventDefault(); const f = e.target; const r = await db.auth.signInWithPassword({ email: f.email.value, password: f.password.value });
   if (r.error) $("#loginMsg").textContent = "Wrong email or password."; else { $("#loginMsg").textContent = ""; lastLoginPw = f.password.value; start(); } };
-$("#logout").onclick = async () => { await db.auth.signOut(); location.hash = ""; start(); };
+$("#logout").onclick = async () => { clearInterval(window.__beat); await db.auth.signOut(); location.hash = ""; start(); };
 // a sign-in link that is expired or already used comes back with an error in the address
 if (/error_description|otp_expired|access_denied/.test(location.hash)) { $("#loginMsg").textContent = "That sign-in link has expired or was already used. Ask the owner to send you a new one."; history.replaceState(null, "", location.pathname); }
 window.addEventListener("hashchange", () => me && route());

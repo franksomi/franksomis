@@ -21,6 +21,8 @@
     bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', chip: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
     wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 13a10 10 0 0 1 14 0M8.5 16.5a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1"/>', printer: '<path d="M6 9V2h12v7M6 18H4v-7h16v7h-2"/><rect x="6" y="14" width="12" height="8"/>',
     tool: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>', truck: '<path d="M2 6h12v10H2zM14 9h4l4 4v3h-8z"/><circle cx="6.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/>',
+    chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/><path d="M9 12h.01M13 12h.01M17 12h.01"/>',
+    network: '<circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v5M12 12l-6 5M12 12l6 5"/>', router: '<rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 17h.01M11 17h.01M8 14l-2-4M16 14l2-4M12 14V8"/>',
     box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/>', check: '<path d="M5 12l5 5 9-10"/>', search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>'
   };
   const svgIcon = (k, size = 26, extra = "") => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${IC[k] || IC.chip}</svg>`;
@@ -67,14 +69,15 @@
   }
 
   // ---- header, footer, cart drawer ----
-  const NAV = [["index.html", "Home"], ["services.html", "Services"], ["shop.html", "Shop"], ["track.html", "Track my order"], ["index.html#contact", "Contact"]];
+  const NAV = [["index.html", "Home"], ["services.html", "Services"], ["shop.html", "Shop"], ["track.html", "Track my order"], ["https://franksomiwifi.com/buy/packages", "Buy WiFi"], ["index.html#contact", "Contact"]];
   function chrome(active) {
     const hd = $("#siteHeader"); if (hd) hd.outerHTML = `<header class="top"><div class="wrap"><a class="brand" href="index.html"><img src="media/emblem.png" alt="" width="42" height="42"><span>Franksomi Solution Ltd<small>${W.tagline}</small></span></a>
       <a class="cartmini" href="#" data-cart aria-label="Open cart">Cart <b data-count>0</b></a><button class="burger" aria-label="Menu" aria-expanded="false">☰</button>
-      <nav class="nav" aria-label="Main">${NAV.map(([h, l]) => `<a href="${h}" class="${h === active ? "on" : ""}">${l}</a>`).join("")}<a href="#" class="cartbtn" data-cart>Cart <b data-count>0</b></a></nav></div></header>`;
+      <nav class="nav" aria-label="Main">${NAV.map(([h, l]) => `<a href="${h}" class="${h === active ? "on" : ""}"${/^http/.test(h) ? ' target="_blank" rel="noopener"' : ""}>${l}</a>`).join("")}<a href="#" class="cartbtn" data-cart>Cart <b data-count>0</b></a></nav></div></header>`;
     const ft = $("#siteFooter"); if (ft) ft.outerHTML = `<footer class="foot"><div class="wrap"><div class="grid"><div><a class="brand" href="index.html"><img src="media/emblem.png" alt="" width="46" height="46"><span>Franksomi Solution Ltd<small>${W.tagline}</small></span></a>
       <p style="margin-top:14px">Phones, laptops, CCTV, electrical, Landlord WiFi, printing and cyber. Fixed right. Tracked live.</p></div>
       <div><h4>Visit the website</h4><a href="services.html">Services</a><a href="shop.html">Online shop</a><a href="track.html">Track an order or repair</a><a href="index.html#contact">Request a quote</a></div>
+      <div><h4>Landlord WiFi</h4><a href="https://franksomiwifi.com/buy/packages" target="_blank" rel="noopener">Buy a hotspot package</a><a href="https://franksomiwifi.com/portal/login" target="_blank" rel="noopener">Customer portal login</a></div>
       <div><h4>Talk to us</h4><a href="tel:${W.tel}">Call ${W.phone}</a><a href="${waLink("Hello Franksomi, ")}" target="_blank" rel="noopener">WhatsApp ${W.phone}</a><a href="mailto:${W.email}">${W.email}</a><span>Kenya</span></div>
       <div><h4>Pay safely</h4><span>M-Pesa prompt to your phone, or pay on delivery / pickup. A receipt every time.</span></div></div>
       <div class="copy"><span>© ${new Date().getFullYear()} Franksomi Solution Ltd. All rights reserved.</span><a href="app.html" style="display:inline">Staff sign-in</a></div></div></footer>
@@ -86,7 +89,61 @@
       if (e.target.closest("[data-close]")) $("#drawer").classList.remove("open");
     });
     document.addEventListener("keydown", e => { if (e.key === "Escape") $("#drawer").classList.remove("open"); });
+    chatWidget();
     const upd = () => document.querySelectorAll("[data-count]").forEach(x => x.textContent = cart.count()); upd(); root.addEventListener("cart", () => { upd(); if ($("#drawer").classList.contains("open")) drawCart(); });
+  }
+
+  // ---- live chat with our staff (works through the same public key; the database allows only these four calls) ----
+  function chatWidget() {
+    if (!db || $("#fkchat") || (root.location && /checkout|track/.test(root.location.pathname) && false)) return;
+    const KEY = "fk_chat", load = () => safe(() => JSON.parse(localStorage.getItem(KEY) || "null"), null), save = v => safe(() => v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY));
+    let st = load(), online = null, timer = null, openNow = false, unread = 0;
+    const el = document.createElement("div"); el.id = "fkchat"; el.innerHTML = `<button class="cbtn" type="button" aria-label="Chat with us" aria-expanded="false">${svgIcon("chat", 20)}<span>Chat with us</span><i class="dot" hidden></i></button>
+      <section class="cpanel" role="dialog" aria-label="Chat with Franksomi" hidden><header><div><b>Chat with Franksomi</b><small class="cst">Checking…</small></div><button type="button" class="cx" aria-label="Close chat">×</button></header>
+      <div class="cbody" aria-live="polite"></div><form class="cfoot" hidden><input name="m" maxlength="1000" placeholder="Type a message…" autocomplete="off" aria-label="Message"><button class="btn sm" type="submit">Send</button></form></section>`;
+    document.body.appendChild(el);
+    const btn = $(".cbtn", el), panel = $(".cpanel", el), body = $(".cbody", el), foot = $(".cfoot", el), stat = $(".cst", el), dot = $(".dot", el);
+    const setStat = o => { online = o; stat.textContent = o ? "We are online" : "We are offline. Leave a message"; stat.className = "cst " + (o ? "on" : "off"); };
+    const bubble = m => `<div class="m ${m.sender}">${m.sender === "staff" ? `<small>${esc(m.name || "Franksomi")}</small>` : ""}${esc(m.body)}</div>`;
+    const scroll = () => { body.scrollTop = body.scrollHeight; };
+    function showForm(msg) {
+      foot.hidden = true;
+      body.innerHTML = `<form class="cstart"><p style="margin:0 0 8px">${online ? "Hi! Ask us anything. A member of our team will reply here." : "Nobody is online right now. Leave your message and phone number and we will get back to you."}</p>
+        ${msg ? `<p class="cerr">${esc(msg)}</p>` : ""}<label>Your name<input name="name" required maxlength="60" autocomplete="name"></label><label>Phone number${online ? " (optional)" : ""}<input name="phone" type="tel" maxlength="20" autocomplete="tel" ${online ? "" : "required"} placeholder="07xx xxx xxx"></label>
+        <label>How can we help?<textarea name="message" required maxlength="1000" rows="3"></textarea></label><button class="btn" type="submit">Start chat</button></form>`;
+      $("form", body).onsubmit = async e => { e.preventDefault(); const f = e.target, b = $("button", f); b.disabled = true;
+        const r = await db.rpc("chat_start", { p: { name: f.name.value, phone: f.phone.value, message: f.message.value, page: root.location ? root.location.pathname : "" } });
+        const d = r.data; b.disabled = false;
+        if (r.error || !d) return showForm("We could not send that. Please try again, or WhatsApp us on " + W.phone + ".");
+        if (!d.ok) return showForm(d.error === "slow_down" ? "You have started several chats in a short time. Please wait a while, or call " + W.phone + "." : d.error === "name" ? "Please type your name." : "Please type a message.");
+        st = { t: d.token, last: 0 }; save(st); setStat(d.online); foot.hidden = false; body.innerHTML = ""; poll(); };
+    }
+    async function poll() {
+      if (!st) return; const r = await db.rpc("chat_poll", { p_token: st.t, p_after: st.last }); const d = r.data;
+      if (r.error || !d) return; if (!d.ok) { save(null); st = null; return openNow ? showForm() : null; }
+      setStat(d.online);
+      if (d.messages.length) {
+        st.last = Math.max(st.last, ...d.messages.map(m => m.id)); save(st);
+        if (openNow) { body.insertAdjacentHTML("beforeend", d.messages.map(bubble).join("")); scroll(); } else { unread += d.messages.filter(m => m.sender === "staff").length; dot.hidden = !unread; }
+      }
+      foot.hidden = !openNow || d.status === "Closed";
+      if (d.status === "Closed" && openNow && !body.querySelector(".again")) body.insertAdjacentHTML("beforeend", `<p class="again"><button class="btn sm" type="button">Start a new chat</button></p>`), $(".again button", body).onclick = () => { save(null); st = null; showForm(); };
+    }
+    async function openPanel() {
+      openNow = true; panel.hidden = false; btn.setAttribute("aria-expanded", "true"); unread = 0; dot.hidden = true;
+      const s = await db.rpc("chat_status"); setStat(!!(s.data && s.data.online));
+      if (!st) { showForm(); } else { body.innerHTML = ""; const keep = st.last; st.last = 0; foot.hidden = false; await poll(); scroll(); }
+      clearInterval(timer); timer = setInterval(() => { if (!document.hidden) poll(); }, 3500);
+    }
+    function closePanel() { openNow = false; panel.hidden = true; btn.setAttribute("aria-expanded", "false"); clearInterval(timer); timer = st ? setInterval(() => { if (!document.hidden) poll(); }, 20000) : null; }
+    btn.onclick = () => openNow ? closePanel() : openPanel(); $(".cx", el).onclick = closePanel;
+    el.addEventListener("keydown", e => { if (e.key === "Escape" && openNow) closePanel(); });
+    foot.onsubmit = async e => { e.preventDefault(); const m = foot.m.value.trim(); if (!m || !st) return; foot.m.value = "";
+      const r = await db.rpc("chat_send", { p_token: st.t, p_body: m }); const d = r.data;
+      if (r.error || !d || !d.ok) { body.insertAdjacentHTML("beforeend", `<div class="m system">${d && d.error === "slow_down" ? "Please slow down a little." : d && d.error === "closed" ? "This chat was closed." : "That message was not sent. Please try again."}</div>`); scroll(); return; }
+      poll(); };
+    if (st) closePanel();   // a chat from earlier: keep an eye out for replies
+    root.addEventListener("pagehide", () => clearInterval(timer));
   }
   async function drawCart() {
     const L = await cartLines(), el = $("#cartLines"), ft = $("#cartFoot"); if (!el) return;

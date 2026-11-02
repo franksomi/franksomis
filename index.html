@@ -62,8 +62,18 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
 <section class="sec alt"><div class="wrap split">
   <div><span class="kicker">Landlord WiFi</span><h2>Affordable. Fast. Reliable.</h2><p class="lead">Hotspot internet for estates, hostels and homes nearby. Join the network, pick a package on the login page and pay by M-Pesa. You are online.</p>
     <ul class="ticks"><li>Join the LANDLORD WIFI network</li><li>Pick a package on the login page</li><li>Pay by M-Pesa and you are connected</li></ul>
-    <a class="btn" href="https://wa.me/254711952924?text=Hello%20Franksomi%2C%20I%20want%20Landlord%20WiFi%20for%20my%20property" target="_blank" rel="noopener">Get Landlord WiFi for your property</a></div>
+    <p style="display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 8px"><a class="btn" href="https://franksomiwifi.com/buy/packages" target="_blank" rel="noopener" id="wifiBuy">Buy a WiFi package</a><a class="btn blue" href="https://franksomiwifi.com/portal/login" target="_blank" rel="noopener" id="wifiLogin">Customer portal login</a></p>
+    <a href="https://wa.me/254711952924?text=Hello%20Franksomi%2C%20I%20want%20Landlord%20WiFi%20for%20my%20property" target="_blank" rel="noopener">Want Landlord WiFi for your property? Ask us on WhatsApp</a></div>
   <div class="poster"><img src="media/promo-wifi.jpg" alt="Welcome to Landlord WiFi: affordable, fast, reliable. Stay connected anytime, anywhere." loading="lazy" width="400" height="711"></div>
+</div></section>
+
+<section class="sec alt" id="business"><div class="wrap split">
+  <div><span class="kicker">For businesses and regular customers</span><h2>Pay at the end of the month</h2><p class="lead">Offices, schools, shops and regular customers can open a monthly account with us for printing, cyber, repairs and ICT work. We keep a clear record, send a statement at month end and you settle by M-Pesa, bank or at the shop.</p>
+    <ul class="ticks"><li>Printing, cyber, repairs and support on one account</li><li>A statement every month with every item listed</li><li>SMS balance reminders and M-Pesa payment</li></ul>
+    <a class="btn" href="#contact" id="bizAsk">Ask for a monthly account</a></div>
+  <div class="card"><h3>ICT support for your business</h3><p style="color:var(--mut)">Network design and cabling, Wi-Fi coverage, CCTV, PCs and printers, email and backup setup, plus a call-out when something breaks. Quote first, then we get it done.</p>
+    <ul class="ticks"><li>Office and school networks</li><li>Routers, switches and access points supplied and configured</li><li>Support visits and monthly support plans</li></ul>
+    <a class="btn blue" href="#contact">Request an ICT quote</a></div>
 </div></section>
 
 <section class="sec"><div class="wrap">
@@ -78,7 +88,7 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
     <a class="btn green" href="https://wa.me/254711952924?text=Hello%20Franksomi%2C%20" target="_blank" rel="noopener">Chat on WhatsApp</a></div>
   <form class="card" id="enqForm" novalidate><h3>Send us a message</h3>
     <label>Your name<input name="name" required autocomplete="name"></label><label>Phone number<input name="phone" type="tel" required autocomplete="tel" placeholder="07xx xxx xxx"></label>
-    <label>What do you need?<select name="topic"><option>Phone repair</option><option>Laptop or printer repair</option><option>CCTV quote</option><option>Electrical quote</option><option>Landlord WiFi</option><option>Phones and accessories</option><option>Printing and cyber</option><option>Something else</option></select></label>
+    <label>What do you need?<select name="topic"><option>Phone repair</option><option>Laptop or printer repair</option><option>CCTV quote</option><option>Electrical quote</option><option>Landlord WiFi</option><option>Networking or ICT support</option><option>Networking equipment</option><option>Monthly account for my business</option><option>Phones and accessories</option><option>Printing and cyber</option><option>Something else</option></select></label>
     <label>Message (optional)<textarea name="message" maxlength="600"></textarea></label><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
     <button class="btn" type="submit">Send</button><p class="msg" id="enqMsg" role="status"></p></form>
 </div></section>
@@ -94,6 +104,8 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
     ["cctv","CCTV installation","Supply, install and set up mobile viewing. Clean cabling and after-sales support.","Linda mali yako 24/7."],
     ["bolt","Electrical installation","Homes, shops and plots. Safe wiring, neat finish, quoted upfront.","Stima salama, kazi safi."],
     ["wifi","Landlord WiFi","Affordable, fast, reliable hotspot internet. Pay by M-Pesa.","Internet ya bei nafuu."],
+    ["network","Networking and ICT support","Office and home networks, routers, structured cabling, server and Windows support, backups and IT help when you need it.","Mtandao wako, usiseme tena."],
+    ["router","Networking equipment","Routers, switches, access points, cables, connectors and network tools, supplied and set up.","Vifaa vya mtandao."],
     ["printer","Printing & cyber","Typing, printing, scanning, KRA, eCitizen and online applications.","Kazi ya cyber? Tuko tayari."],
     ["truck","Delivery & logistics","Rider in town and courier countrywide for shop orders, with live tracking.","Tunaleta mlangoni."]];
   WEB.chrome("index.html");
@@ -106,6 +118,7 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
   WEB.products().then(function(r){
     if(r.offline||r.error||!r.list.length){box.innerHTML='<div class="empty" style="grid-column:1/-1"><img src="media/emblem.png" alt="">'+(r.offline?"The online shop is being set up.":r.error?"We could not load the shop just now.":"New stock is being added.")+' Ask us on <a href="'+WEB.waLink("Hello Franksomi, what accessories do you have?")+'">WhatsApp</a>.</div>';return}
     var l=r.list.slice(0,8);box.innerHTML=l.map(WEB.card).join("");WEB.wireProducts(box,function(id){return r.list.find(function(p){return String(p.id)===String(id)})});});
+  document.getElementById("bizAsk").onclick=function(){document.getElementById("enqForm").topic.value="Monthly account for my business"};
   document.getElementById("enqForm").onsubmit=async function(e){e.preventDefault();var f=e.target,m=document.getElementById("enqMsg");m.className="msg";
     if(!WEB.db){m.className="msg bad";m.textContent="The form is not switched on yet. Please call or WhatsApp us on 0711 952 924.";return}
     var b=f.querySelector("button");b.disabled=true;m.textContent="Sending…";
