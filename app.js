@@ -80,7 +80,7 @@ const T = {
 const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
   ["docs", "Quote / Invoice / Receipt", "docs.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
   ["mpay", "M-Pesa checkout", "mpay.use"], ["sms", "SMS messages", "sms.manage"], ["eod", "End of day", "eod.view"], ["monthly", "Monthly report", "reports.view+costs.view"], ["summary", "Year summary", "reports.view+costs.view"],
-  ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["users", "Users & roles", "users.manage"]];
+  ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["payables", "Supplier payables", "payables.view"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["users", "Users & roles", "users.manage"]];
 const navFor = () => NAV.filter(n => !n[2] || can(n[2]));
 
 // ---- form widgets -----------------------------------------------------------
@@ -279,21 +279,70 @@ async function zonesPage() {
 }
 
 // ---- dashboard --------------------------------------------------------------
+const dnice = v => { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
+const dshort = v => v >= 1e6 ? (v / 1e6).toFixed(v % 1e6 ? 1 : 0) + "M" : v >= 1e3 ? (v / 1e3).toFixed(v % 1e3 ? 1 : 0) + "k" : String(Math.round(v));
+const PALETTE = ["#0d6eae", "#12b76a", "#ff914d", "#7a5af8", "#1a8f7a", "#f5b97a", "#e5484d"];
+// horizontal bars: rows = [{ l: label, v: number, c?: colour, t?: text shown at the end }]
+function hbars(rows, colour = "#0d6eae") {
+  rows = rows.filter(r => Number(r.v) > 0); if (!rows.length) return `<p style="color:var(--mut);margin:6px 0">Nothing to show yet.</p>`;
+  const mx = Math.max(...rows.map(r => Number(r.v)));
+  return `<div class="hb">${rows.map(r => `<div class="hbr"><span class="hbl" title="${esc(r.l)}">${esc(r.l)}</span><span class="hbt"><i style="width:${Math.max(3, Number(r.v) / mx * 100)}%;background:${r.c || colour}"></i></span><b>${esc(r.t ?? kes(r.v))}</b></div>`).join("")}</div>`;
+}
+// last 14 days: income and expenses side by side
+function dayChart(days) {
+  const W = 640, H = 210, L = 40, B = 176, T = 12, top = dnice(Math.max(1, ...days.map(d => Math.max(Number(d.income), Number(d.expenses)))));
+  const y = v => B - (v / top) * (B - T), step = (W - L - 6) / days.length, bw = Math.min(14, step / 2 - 2);
+  const grid = [0, 1, 2, 3, 4].map(i => { const v = top * i / 4; return `<line x1="${L}" x2="${W - 4}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--mut)">${dshort(v)}</text>`; }).join("");
+  const cols = days.map((d, i) => { const cx = L + step * i + step / 2, inc = Number(d.income), ex = Number(d.expenses), dd = String(d.d).slice(8, 10);
+    return `<g><title>${esc(d.d)}: income KES ${Math.round(inc).toLocaleString("en-KE")}, expenses KES ${Math.round(ex).toLocaleString("en-KE")}</title><rect x="${cx - bw - 1}" y="${y(inc)}" width="${bw}" height="${Math.max(0, B - y(inc))}" rx="2" fill="#0d6eae"/><rect x="${cx + 1}" y="${y(ex)}" width="${bw}" height="${Math.max(0, B - y(ex))}" rx="2" fill="#ff914d"/><text x="${cx}" y="${B + 15}" text-anchor="middle" font-size="11" fill="var(--mut)">${dd}</text></g>`; }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Income and expenses for each of the last 14 days">${grid}${cols}</svg><div class="legend"><span><i style="background:#0d6eae"></i>Income</span><span><i style="background:#ff914d"></i>Expenses</span></div>`;
+}
+const delta = (now, before, goodUp = true) => {
+  now = Number(now), before = Number(before); if (!before) return now ? `<span class="dl">new this month</span>` : "";
+  const p = Math.round((now - before) / before * 100); if (!p) return `<span class="dl">same as last month so far</span>`;
+  const good = goodUp ? p > 0 : p < 0; return `<span class="dl ${good ? "up" : "dn"}">${p > 0 ? "▲" : "▼"} ${Math.abs(p)}% vs same days last month</span>`;
+};
 async function dashboard() {
   const yr = Number(sessionStorage.getItem("yr")) || new Date().getFullYear();
   const d = must(await db.rpc("dashboard", { yr }));
+  const exr = await db.rpc("dashboard_extra", { yr }); const ex = (exr && !exr.error && exr.data) || {};   // older databases without v16 still work
   let pipe = "", sm = null;
   if (can("repairs.view")) { const rr = (await db.from("v_repairs").select("stage,returned_on").limit(2000)).data || []; const c = {}; rr.filter(x => !x.returned_on && x.stage !== "Collected").forEach(x => c[x.stage || "Received"] = (c[x.stage || "Received"] || 0) + 1); pipe = BRAND.pipeline(c); }
   if (can("reports.view+costs.view")) { const r = await db.rpc("summary_report", { yr }); sm = r.data || null; }
-  const k = (l, v, ic, cls, money) => `<div class="card kpi ${cls || ""}"><span class="ico">${BRAND.icon(ic, 20)}</span><small>${l}</small><b>${money ? "KES " + kes(v) : v}</b></div>`;
+  const k = (l, v, ic, cls, money, sub) => `<div class="card kpi ${cls || ""}"><span class="ico">${BRAND.icon(ic, 20)}</span><small>${l}</small><b>${money ? "KES " + kes(v) : v}</b>${sub ? `<div>${sub}</div>` : ""}</div>`;
   const hr = new Date().getHours(), hi = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening", first = String(me.full_name || "").split(" ")[0];
   const pay = sm ? ["cash_in", "mpesa_in", "bank_in"].map((f, i) => ({ n: ["Cash", "M-Pesa", "Bank"][i], c: ["#0d6eae", "#12b76a", "#ff914d"][i], v: (sm.months || []).reduce((s, m) => s + Number(m[f] || 0), 0) })) : null;
+  const src = sm && sm.lines ? Object.entries(sm.lines).map(([n, v], i) => ({ n, v: Number(v), c: PALETTE[i % PALETTE.length] })).filter(p => p.v > 0).sort((a, b) => b.v - a.v) : null;
+  // things that need someone to act today
+  const att = [];
+  const add = (n, text, href, ic) => { if (Number(n) > 0) att.push(`<a class="att" href="#${href}">${BRAND.icon(ic, 18)}<b>${n}</b><span>${esc(text)}</span></a>`); };
+  add(ex.repairs_ready, "repair(s) ready: call the customer", "repairs", "repairs");
+  add(ex.repairs_old, "repair(s) in the shop over 14 days", "repairs", "repairs");
+  add(d.reorder, "item(s) to reorder", "inventory", "inventory");
+  add(d.orders_open, "online order(s) to handle", "orders", "orders");
+  add(d.enquiries_new, "new website enquiry(ies)", "enquiries", "enquiries");
+  add(d.chat_waiting, "live chat(s) waiting", "chat", "chat");
+  if (ex.payables) add(Number(ex.payables.overdue) > 0 ? 1 : 0, "supplier bill(s) overdue: KES " + kes(ex.payables.overdue), "payables", "payables");
+  if (ex.payables && Number(ex.payables.due7) > Number(ex.payables.overdue)) add(1, "KES " + kes(Number(ex.payables.due7) - Number(ex.payables.overdue)) + " supplier bills due this week", "payables", "payables");
+  if (ex.receivables) add(Number(ex.receivables.overdue) > 0 ? 1 : 0, "credit account balance(s) over 30 days: KES " + kes(ex.receivables.overdue), "accounts", "accounts");
+  const owedIn = (ex.receivables ? Number(ex.receivables.owed) : 0) + (d.owner ? Number(d.owed || 0) : 0), owedOut = ex.payables ? Number(ex.payables.owed) : 0;
+  const topTbl = (title, rows, href) => rows && rows.length ? `<div class="panel"><h3>${title}</h3><table><tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td class="n">${kes(r.balance)}</td><td class="n">${Number(r.overdue) > 0 ? `<span class="tag bad">${kes(r.overdue)} late</span>` : ""}</td></tr>`).join("")}</tbody></table><p style="margin:8px 0 0"><a href="#${href}">Open the full list</a></p></div>` : "";
   $("#view").innerHTML = `<div class="hero"><div class="row1"><img src="logo.png" alt="" width="64" height="64"><div><h2>${hi}${first ? ", " + esc(first) : ""}</h2><p>${esc(new Date().toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))} · ${esc(roleName(me.role))}</p><span class="tagline">${BRAND.TAGLINE}</span></div></div></div>
     <div class="bar"><label>Year <input id="yr" type="number" value="${yr}" style="width:100px"></label></div>
+    <div class="panel" id="attn"><h3>Needs attention</h3>${att.length ? `<div class="attrow">${att.join("")}</div>` : `<p style="margin:0;color:#067647">All clear. Nothing is waiting for you.</p>`}</div>
     <div class="cards">${k("Repairs still in shop", d.in_shop, "repairs")}${k("Jobs in progress", d.jobs_open, "jobs")}${k("Items to reorder", d.reorder, "inventory", "o")}${d.orders_open != null ? k("Online orders to handle", d.orders_open, "orders", d.orders_open ? "o" : "") : ""}${d.accounts_owed != null && d.accounts_owed > 0 ? k("Owed by credit accounts", d.accounts_owed, "accounts", "o", 1) : ""}${d.chat_waiting ? k("Live chats waiting", d.chat_waiting, "chat", "o") : ""}${d.enquiries_new ? k("New website enquiries", d.enquiries_new, "enquiries", "o") : ""}</div>
-    ${d.owner ? `<div class="cards">${k("Total income (year)", d.income, "income", "g", 1)}${k("Total expenses (year)", d.expenses, "expenses", "o", 1)}${k("Cash profit (year)", d.profit, "profit", "g", 1)}${k("Owed by clients", d.owed, "owed", "o", 1)}${k("Customer deposits held", d.deposits_held, "deposit", "", 1)}</div>`
+    ${d.owner ? `<div class="cards">${ex.income_month != null ? k("Income this month", ex.income_month, "income", "g", 1, delta(ex.income_month, ex.income_last_same, true)) + k("Expenses this month", ex.expenses_month, "expenses", "o", 1, delta(ex.expenses_month, ex.expenses_last_same, false)) : ""}${k("Total income (year)", d.income, "income", "g", 1)}${k("Total expenses (year)", d.expenses, "expenses", "o", 1)}${k("Cash profit (year)", d.profit, "profit", "g", 1)}${k("Owed by clients", d.owed, "owed", "o", 1)}${k("Customer deposits held", d.deposits_held, "deposit", "", 1)}${ex.stock_value != null ? k("Stock on the shelf (at cost)", ex.stock_value, "inventory", "", 1) : ""}</div>`
       : `<p style="color:var(--mut)">Money totals are shown only to roles that may see reports.</p>`}
-    <div class="charts">${pipe ? `<div class="panel"><h3>Repairs in the shop, by stage</h3>${pipe}</div>` : ""}${sm ? `<div class="panel"><h3>Money received by payment method (${yr})</h3>${BRAND.donut(pay, "Received")}</div>` : ""}</div>
+    ${ex.payables || ex.receivables ? `<div class="charts"><div class="panel"><h3>Owed to you and by you</h3>${hbars([{ l: "Owed to you (customers)", v: owedIn, c: "#12b76a", t: "KES " + kes(owedIn) }, { l: "Of which over 30 days", v: ex.receivables ? ex.receivables.overdue : 0, c: "#e5484d", t: "KES " + kes(ex.receivables ? ex.receivables.overdue : 0) }, { l: "You owe suppliers", v: owedOut, c: "#ff914d", t: "KES " + kes(owedOut) }, { l: "Of which overdue", v: ex.payables ? ex.payables.overdue : 0, c: "#e5484d", t: "KES " + kes(ex.payables ? ex.payables.overdue : 0) }])}
+      ${ex.payables && ex.receivables ? `<p style="margin:10px 0 0">Net: <b>KES ${kes(owedIn - owedOut)}</b> <small style="color:var(--mut)">(what customers owe you minus what you owe suppliers)</small></p>` : ""}</div>
+      ${topTbl("Customers who owe most", ex.receivables && ex.receivables.top, "accounts")}${topTbl("Suppliers you owe most", ex.payables && ex.payables.top, "payables")}</div>` : ""}
+    <div class="charts">${ex.daily ? `<div class="panel wide"><h3>Last 14 days: income and expenses</h3>${dayChart(ex.daily)}</div>` : ""}${pipe ? `<div class="panel"><h3>Repairs in the shop, by stage</h3>${pipe}</div>` : ""}
+      ${src && src.length ? `<div class="panel"><h3>Where income comes from (${yr})</h3>${BRAND.donut(src, "Income")}</div>` : ""}${sm ? `<div class="panel"><h3>Money received by payment method (${yr})</h3>${BRAND.donut(pay, "Received")}</div>` : ""}
+      ${ex.expense_cats ? `<div class="panel"><h3>Where the money goes (${yr})</h3>${hbars(ex.expense_cats.map(x => ({ l: x.category, v: x.amount })), "#ff914d")}</div>` : ""}
+      ${ex.top_items ? `<div class="panel"><h3>Best sellers, last 30 days</h3>${hbars(ex.top_items.map(x => ({ l: x.item, v: x.sales, t: "KES " + kes(x.sales) })), "#12b76a")}</div>` : ""}
+      ${ex.jobs_stage && ex.jobs_stage.length ? `<div class="panel"><h3>Field jobs, by stage</h3>${hbars(ex.jobs_stage.map(x => ({ l: x.stage, v: x.n, t: String(x.n) })))}</div>` : ""}
+      ${ex.orders_stage && ex.orders_stage.length ? `<div class="panel"><h3>Online orders still open, by stage</h3>${hbars(ex.orders_stage.map(x => ({ l: x.stage, v: x.n, t: String(x.n) })), "#7a5af8")}</div>` : ""}
+      ${ex.low_stock && ex.low_stock.length ? `<div class="panel"><h3>Running low</h3><table><tbody>${ex.low_stock.map(x => `<tr><td>${esc(x.item)}</td><td class="n"><span class="tag bad">${Number(x.on_hand)} left</span></td><td class="n"><small>reorder at ${Number(x.reorder)}</small></td></tr>`).join("")}</tbody></table><p style="margin:8px 0 0"><a href="#inventory">Open stock</a></p></div>` : ""}</div>
     ${sm ? `<div class="panel"><h3>Income and expenses by month (${yr})</h3><div style="overflow-x:auto"><div style="min-width:560px;max-width:820px;margin:auto">${BRAND.bars(sm.months || [])}</div></div></div>` : ""}
     <h3 style="margin:6px 0 8px">Go to</h3><div class="tiles">${navFor().slice(1).map(([k2, l]) => `<a class="tile" href="#${k2}">${BRAND.icon(k2, 20)}${esc(l)}</a>`).join("")}</div>`;
   $("#yr").onchange = e => { sessionStorage.setItem("yr", e.target.value); route(); };
@@ -435,6 +484,80 @@ async function chatPage() {
   $("#cclose").onclick = async () => { if (!cur) return; const to = $("#cclose").dataset.s === "Closed" ? "Open" : "Closed"; const r = await db.rpc("chat_set_status", { p_id: cur, p_status: to }); if (r.error) return toast(r.error.message); await open(cur, true); inbox(); };
   await inbox(); chatBeat();
   (window.__t = window.__t || []).push(setInterval(async () => { if (!document.hidden) { inbox(); if (cur) open(cur, false); } }, 4000));
+}
+
+// ---- supplier payables (what you owe suppliers) -------------------------------------------------
+async function payablesPage() {
+  const rows = must(await db.from("supplier_balances").select("*").order("name")) || [], edit = can("payables.edit");
+  const sum = f => rows.reduce((s, r) => s + Math.max(Number(r[f]), 0), 0);
+  let showAll = sessionStorage.getItem("payall") === "1";
+  const draw = () => {
+    const q = ($("#pq") ? $("#pq").value : "").toLowerCase(), list = rows.filter(r => (showAll || Number(r.balance) !== 0 || Number(r.billed) > 0) && (!q || (r.name + (r.phone || "") + (r.contact_person || "")).toLowerCase().includes(q)));
+    $("#ptb").innerHTML = list.map(r => `<tr><td><b>${esc(r.name)}</b><br><small>${esc([r.contact_person, r.phone].filter(Boolean).join(" · "))}</small></td><td class="n">${kes(r.billed)}</td><td class="n">${kes(r.paid)}</td><td class="n"><b>${kes(r.balance)}</b></td>
+      <td class="n">${Number(r.overdue) > 0 ? `<span class="tag bad">${kes(r.overdue)}</span>` : ""}</td><td class="n">${Number(r.due_7_days) > 0 ? kes(r.due_7_days) : ""}</td><td>${esc(r.last_paid || "")}</td>
+      <td><button class="btn sm" data-st="${r.id}">Statement</button> ${edit ? `<button class="btn sm ghost" data-bill="${r.id}">+ Bill</button> <button class="btn sm" style="background:#12b76a" data-pay="${r.id}">Pay</button>` : ""}</td></tr>`).join("")
+      || `<tr><td colspan="8"><div class="empty">${BRAND.emptyArt(130)}No supplier bills yet. Add suppliers under <a href="#suppliers">Suppliers</a>, then press “+ Bill” when stock arrives on credit.</div></td></tr>`;
+  };
+  $("#view").innerHTML = `<h2>Supplier payables</h2><p style="color:var(--mut);margin-top:0">What you owe suppliers. Record each supplier invoice with <b>+ Bill</b> and its due date; record each payment with <b>Pay</b>. Payments settle the oldest bills first, and every payment is also written to Expenses (Stock purchase) so End of day and the reports stay right.</p>
+    <div class="cards"><div class="card"><small>You owe suppliers</small><b>KES ${kes(sum("balance"))}</b></div><div class="card"><small>Overdue</small><b style="color:#b42318">KES ${kes(sum("overdue"))}</b></div><div class="card"><small>Due within 7 days (incl. overdue)</small><b>KES ${kes(sum("due_7_days"))}</b></div><div class="card"><small>Suppliers owed</small><b>${rows.filter(r => Number(r.balance) > 0).length}</b></div></div>
+    <div class="bar"><input id="pq" placeholder="Search suppliers…" style="max-width:240px"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="pall" ${showAll ? "checked" : ""} style="width:auto"> Show suppliers with no bills</label></div>
+    <div class="wrap"><table><thead><tr><th>Supplier</th><th>Billed</th><th>Paid</th><th>Balance (KES)</th><th>Overdue</th><th>Due in 7 days</th><th>Last paid</th><th></th></tr></thead><tbody id="ptb"></tbody></table></div>`;
+  draw(); $("#pq").oninput = draw; $("#pall").onchange = e => { showAll = e.target.checked; sessionStorage.setItem("payall", showAll ? "1" : "0"); draw(); };
+  const by = id => rows.find(r => String(r.id) === String(id));
+  $("#ptb").onclick = e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.st) supplierStatement(by(b.dataset.st)); if (b.dataset.bill) billDialog(by(b.dataset.bill)); if (b.dataset.pay) supplierPayDialog(by(b.dataset.pay)); };
+}
+function billDialog(s) {
+  const f = $("#dlgForm"), dlg = $("#dlg"), plus = n => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
+  f.innerHTML = `<h2>New bill – ${esc(s.name)}</h2><div class="grid"><label>Supplier invoice no.<input name="ref" autocomplete="off"></label><label>Amount (KES)<input name="amount" type="number" min="1" step="any" required></label>
+    <label>Bill date<input name="bill_date" type="date" value="${iso(new Date())}" required></label><label>Payment terms<select name="terms"><option value="0">Due on the bill date</option><option value="7">7 days</option><option value="14">14 days</option><option value="30" selected>30 days</option><option value="60">60 days</option><option value="x">Choose the due date…</option></select></label>
+    <label>Due date<input name="due_date" type="date" value="${plus(30)}" required></label><label>What it is for<input name="description" placeholder="For example: 10 phone screens"></label><label class="full">Notes<input name="notes"></label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save bill</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  const el = f.elements, setDue = () => { const t = el.terms.value; if (t === "x") return; const d = new Date(el.bill_date.value || new Date()); d.setDate(d.getDate() + Number(t)); el.due_date.value = iso(d); };
+  el.terms.onchange = setDue; el.bill_date.onchange = setDue;
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault();
+    if (el.due_date.value < el.bill_date.value) return toast("The due date cannot be before the bill date.");
+    const r = await db.from("supplier_bills").insert({ supplier_id: s.id, bill_date: el.bill_date.value, due_date: el.due_date.value, ref: el.ref.value.trim() || null, description: el.description.value.trim() || null, amount: Number(el.amount.value), notes: el.notes.value.trim() || null }).select("id");
+    if (r.error) return toast(r.error.message); dlg.close(); toast("Bill saved"); route(); };
+  dlg.showModal();
+}
+function supplierPayDialog(s) {
+  const f = $("#dlgForm"), dlg = $("#dlg");
+  f.innerHTML = `<h2>Pay ${esc(s.name)}</h2><p style="margin-top:0">You owe <b>KES ${kes(s.balance)}</b>${Number(s.overdue) > 0 ? ` (KES ${kes(s.overdue)} overdue)` : ""}. The payment is also recorded as an expense.</p><div class="grid">
+    <label>Amount paid (KES)<input name="amount" type="number" min="1" step="any" value="${Math.max(Math.floor(s.balance), 0) || ""}" required></label><label>Paid by<select name="method"><option>Cash</option><option>M-Pesa</option><option>Bank</option></select></label>
+    <label>M-Pesa code / bank reference<input name="ref" autocomplete="off"></label><label>Date<input name="date" type="date" value="${iso(new Date())}"></label><label class="full">Note<input name="note" placeholder="For example: INV-102"></label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save payment</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements, amt = Number(el.amount.value);
+    if (amt > Number(s.balance) && !confirm(`This is more than the KES ${kes(s.balance)} you owe ${s.name}. Record it as an advance payment?`)) return;
+    const r = await db.rpc("supplier_pay", { p_supplier: s.id, p_amount: amt, p_method: el.method.value, p_ref: el.ref.value.trim().toUpperCase().replace(/\s+/g, "") || null, p_date: el.date.value || null, p_note: el.note.value.trim() || null });
+    if (r.error) return toast(r.error.message); dlg.close(); toast("Payment saved. You now owe KES " + kes(r.data.balance)); route(); };
+  dlg.showModal();
+}
+async function supplierStatement(s) {
+  const now = new Date(); let from = iso(new Date(now.getFullYear(), 0, 1)), to = iso(now);
+  const f = $("#dlgForm"), dlg = $("#dlg");
+  const draw = async () => {
+    const r = await db.rpc("supplier_statement", { p_supplier: s.id, p_from: from, p_to: to }); if (r.error) return toast(r.error.message); const st = r.data;
+    f.innerHTML = `<h2>Statement – ${esc(s.name)}</h2><div class="bar"><label>From <input name="from" type="date" value="${from}"></label><label>To <input name="to" type="date" value="${to}"></label><button class="btn sm ghost" value="year" formnovalidate>This year</button><button class="btn sm ghost" value="all" formnovalidate>Everything</button></div>
+      <div class="cards"><div class="card"><small>Brought forward</small><b>${kes(st.opening)}</b></div><div class="card"><small>Billed</small><b>${kes(st.billed)}</b></div><div class="card"><small>Paid</small><b>${kes(st.paid)}</b></div><div class="card"><small>You owe</small><b>KES ${kes(st.closing)}</b></div></div>
+      <div class="wrap"><table><thead><tr><th>Date</th><th>Details</th><th>Bill</th><th>Payment</th><th>Balance</th><th></th></tr></thead><tbody>${st.lines.map((l, i) => `<tr><td>${esc(l.date)}${l.due ? `<br><small>due ${esc(l.due)}</small>` : ""}</td><td>${esc([l.ref, l.description, l.kind === "payment" ? l.method : ""].filter(Boolean).join(" · "))}</td>
+        <td class="n">${l.amount > 0 ? kes(l.amount) : ""}</td><td class="n">${l.amount < 0 ? kes(-l.amount) : ""}</td><td class="n">${kes(l.balance)}</td><td>${can("money.all") ? `<button class="btn sm warn" value="del${i}" formnovalidate title="Delete this line">×</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="6">Nothing in this period.</td></tr>`}</tbody></table></div>
+      <div class="bar" style="margin-top:14px"><button class="btn" value="print" formnovalidate>Print / PDF</button><button class="btn ghost" value="cancel" formnovalidate>Close</button></div>`;
+    f.onsubmit = async e => { const v = e.submitter && e.submitter.value; if (v === "cancel" || !v) return; e.preventDefault();
+      if (v === "year") { from = iso(new Date(now.getFullYear(), 0, 1)); to = iso(now); return draw(); }
+      if (v === "all") { from = "2000-01-01"; to = iso(now); return draw(); }
+      if (v === "print") return printHtml(supplierStatementHtml(st), `${s.name} statement ${st.to}.pdf`);
+      if (v.startsWith("del")) { const l = st.lines[Number(v.slice(3))]; if (!confirm(l.kind === "payment" ? "Delete this payment? Its expense is removed too." : "Delete this bill?")) return;
+        const q = await db.from(l.kind === "payment" ? "supplier_payments" : "supplier_bills").delete().eq("id", l.id); if (q.error) return toast(q.error.message); toast("Deleted"); draw(); } };
+    f.elements.from.onchange = e => { from = e.target.value; draw(); }; f.elements.to.onchange = e => { to = e.target.value; draw(); };
+  };
+  await draw(); dlg.showModal();
+}
+function supplierStatementHtml(st) {
+  const s = st.supplier;
+  return head("SUPPLIER ACCOUNT", "") + kv([["Supplier", s.name], ["Contact", [s.contact_person, s.phone].filter(Boolean).join(" · ")], ["Period", `${st.from} to ${st.to}`]]) +
+    `<table style="margin-top:10px"><thead><tr><th>Date</th><th>Details</th><th>Bill (KES)</th><th>Paid (KES)</th><th>Balance (KES)</th></tr></thead><tbody><tr><td></td><td><i>Balance brought forward</i></td><td></td><td></td><td>${kes(st.opening)}</td></tr>
+    ${st.lines.map(l => `<tr><td>${esc(l.date)}</td><td>${esc([l.ref, l.description, l.kind === "payment" ? l.method : l.due ? "due " + l.due : ""].filter(Boolean).join(" · "))}</td><td>${l.amount > 0 ? kes(l.amount) : ""}</td><td>${l.amount < 0 ? kes(-l.amount) : ""}</td><td>${kes(l.balance)}</td></tr>`).join("")}
+    <tr><th colspan="2" align="right">Totals</th><th>${kes(st.billed)}</th><th>${kes(st.paid)}</th><th></th></tr><tr><th colspan="4" align="right">WE OWE (KES)</th><th>${kes(st.closing)}</th></tr></tbody></table>`;
 }
 
 // ---- lists ------------------------------------------------------------------
@@ -957,7 +1080,7 @@ async function route() {
   if (nv && nv[2] && !can(nv[2]) && !(k === "suppliers")) { $("#view").innerHTML = `<h2>Not allowed</h2><p>Your role (${esc(roleName(me.role))}) does not include this page. Ask the owner if you need it.</p>`; return; }
   const decorate = () => { const h = document.querySelector("#view > h2"); if (h) { const w = document.createElement("div"); w.className = "pagehead"; w.innerHTML = BRAND.icon(k, 22); h.replaceWith(w); w.appendChild(h); } };
   try { if (k === "dashboard") await dashboard(); else if (k === "lists") await listsPage(); else if (k === "docs") await docsPage(); else if (k === "eod") await eodPage(); else if (k === "monthly") await monthlyPage(); else if (k === "summary") await summaryPage();
-    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
+    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
 }
 async function start() {
   const { data: { session } } = await db.auth.getSession();
