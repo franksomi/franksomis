@@ -4,7 +4,7 @@
 <title>Checkout | Franksomi Solution Ltd</title><meta name="description" content="Checkout: delivery or pickup, pay by M-Pesa or on delivery."><meta name="theme-color" content="#0E152B">
 <link rel="icon" href="media/emblem.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap"><link rel="stylesheet" href="web.css">
-</head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
+<link rel="manifest" href="site.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
 <section class="shophead"><div class="wrap"><span class="kicker">Almost there</span><h1 style="font-size:clamp(1.8rem,5vw,2.6rem)">Checkout</h1></div></section>
 <main id="main" class="wrap" style="padding:30px 18px 70px">
 <div id="done" hidden></div>
@@ -68,4 +68,4 @@
     else $("#pstate").innerHTML='<p class="msg ok">You will pay when your order arrives.</p>'}
   init();
 })();
-</script></body></html>
+</script><script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>
