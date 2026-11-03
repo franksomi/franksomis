@@ -13,7 +13,7 @@
 // invite / password-reset links used to land on this address: send them to the staff app with their sign-in token intact
 if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.test(location.hash + location.search)) location.replace("app.html" + location.search + location.hash);
 </script>
-</head><body>
+<link rel="manifest" href="site.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head><body>
 <a class="skip" href="#main">Skip to content</a>
 <div id="siteHeader"></div>
 <main id="main">
@@ -127,4 +127,4 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
     m.className="msg ok";m.textContent="Thank you! We will call or message you soon.";f.reset()};
 })();
 </script>
-</body></html>
+<script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>

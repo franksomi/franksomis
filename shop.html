@@ -4,7 +4,7 @@
 <title>Online shop | Franksomi Solution Ltd</title><meta name="description" content="Phones, accessories and electronics delivered to your door or ready for pickup. Pay by M-Pesa or on delivery. Track your order up to delivery."><meta name="theme-color" content="#0E152B">
 <link rel="icon" href="media/emblem.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap"><link rel="stylesheet" href="web.css">
-</head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
+<link rel="manifest" href="site.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
 <section class="shophead"><div class="wrap"><span class="kicker">Franksomi online shop</span><h1 style="font-size:clamp(1.8rem,5vw,2.8rem)">Accessories &amp; electronics</h1><p>Tested before you leave. Pay by M-Pesa or on delivery. Track your order up to your door.</p></div></section>
 <main id="main" class="wrap" style="padding-bottom:70px">
   <div class="toolbar"><input id="q" type="search" placeholder="Search products…" aria-label="Search products"><select id="sort" aria-label="Sort"><option value="feat">Popular first</option><option value="low">Price: low to high</option><option value="high">Price: high to low</option><option value="az">Name A to Z</option></select><a href="track.html" class="btn sm blue" style="margin-left:auto">Track my order</a></div>
@@ -30,4 +30,4 @@
     WEB.wireProducts(grid,function(id){return all.find(function(p){return String(p.id)===String(id)})});
     var want=new URLSearchParams(location.search).get("p");if(want){var p=all.find(function(x){return String(x.id)===want});if(p)WEB.showProduct(p)}});
 })();
-</script></body></html>
+</script><script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>

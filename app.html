@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Franksomi Records (staff)</title>
 <link rel="icon" href="logo.png"><link rel="stylesheet" href="style.css">
-</head><body>
+<link rel="manifest" href="app.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#0E152B"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head><body>
 <div id="login" hidden>
   <div class="login-art"><img src="logo.png" alt=""><h1>Franksomi Solution Ltd</h1><div class="tagline">For Quality Solutions in Tech</div><ul><li>Repairs</li><li>Sales</li><li>Installations</li><li>Printing &amp; Cyber</li></ul></div>
   <form id="loginForm"><h1>Sign in</h1><p>Franksomi record book</p>
@@ -32,4 +32,4 @@
 <script src="pdf.js"></script>
 <script src="app.js"></script>
 <script>document.querySelectorAll(".yr").forEach(function(e){e.textContent=new Date().getFullYear()})</script>
-</body></html>
+<script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>

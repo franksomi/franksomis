@@ -27,11 +27,12 @@ const PAY = ["Cash", "M-Pesa", "Bank"], PAYX = [...PAY, "On account"];
 const LEFT_WITH = ["SIM", "Memory card", "Battery", "Charger", "Case"], CONDITION = ["Cracked screen", "Scratches", "Water damage", "Will not power on"];
 const T = {
   repairs: { title: "Repairs", view: "v_repairs", perm: "repairs", table: "repairs", order: "id", print: "jobcard", mpay: "repair",
-    cols: [["id", "No."], ["received_on", "Received"], ["customer_name", "Customer"], ["contact", "Contact"], ["item_type", "Item"], ["brand_model", "Brand / model"], ["fault", "Fault"],
+    cols: [["id", "No."], ["received_on", "Received"], ["customer_name", "Customer"], ["contact", "Contact"], ["alt", "Alt. contact"], ["item_type", "Item"], ["brand_model", "Brand / model"], ["fault", "Fault"],
       ["stage", "Stage"], ["total_cost", "Total (KES)", "n"], ["balance_due", "Balance due", "n"], ["deposit_held", "Deposit held", "n"], ["status", "Status", "tag"]],
     fields: [["received_on", "Date received", "date", { today: 1 }], ["customer_name", "Customer name", "text", { req: 1 }], ["contact", "Contact", "text"],
       ["item_type", "Item type", "list:item_type"], ["brand_model", "Brand / model", "list:brand"], ["serial_no", "Serial no. / IMEI", "text"],
       ["stage", "Repair stage (customer sees this)", "select:Received,Diagnosing,Waiting for approval,Waiting for parts,Repairing,Testing,Ready for collection,Collected", { def: "Received" }], ["customer_note", "Message to customer (shown on the tracking page)", "text", { full: 1 }], ["sms_optout", "Do NOT send this customer SMS updates", "check"],
+      ["alt_name", "Alternative contact: who (if the customer cannot be reached)", "text"], ["alt_phone", "Alternative contact: phone", "text"],
       ["fault", "Fault reported", "text", { full: 1 }], ["left_with", "Left with the device (tick what the customer handed in)", "multi:" + LEFT_WITH.join("|"), { full: 1 }],
       ["condition", "Condition on arrival", "multi:" + CONDITION.join("|"), { full: 1 }], ["diagnosis", "Diagnosis", "text", { full: 1 }],
       ["part1_id", "Part used 1 (from stock)", "stock"], ["part1_qty", "Qty", "number"], ["part2_id", "Part used 2 (from stock)", "stock"], ["part2_qty", "Qty", "number"],
@@ -114,19 +115,78 @@ function readForm(form, fields) {
   }
   return out;
 }
+// ---- extra item lines (several items in one sale, many parts on a repair) ----
+const lineHtml = (kind, o = {}) => `<div class="xline" data-line>
+  <select name="li_item" class="xi" aria-label="Item from stock"><option value=""></option>${stockItems.map(i => `<option value="${i.id}" data-price="${i.selling_price ?? 0}" ${String(i.id) === String(o.item_id) ? "selected" : ""}>${esc(i.code)} – ${esc(i.description)} (${i.on_hand} in stock)</option>`).join("")}</select>
+  <input name="li_name" class="xn" placeholder="…or type an item not in stock" value="${o.item_id ? "" : esc(o.description || "")}" ${o.item_id ? "disabled" : ""} maxlength="120">
+  <input name="li_qty" type="number" step="any" min="0.01" value="${o.qty ?? 1}" class="xq" title="Qty" aria-label="Qty">
+  <input name="li_price" type="number" step="any" min="0" value="${o.unit_price ?? ""}" class="xp" placeholder="Price" title="Unit price (KES)" aria-label="Unit price">
+  ${kind === "sales" && can("costs.view") ? `<input name="li_cost" type="number" step="any" min="0" class="xp" placeholder="Unit cost" title="Unit cost, for an item not in stock" aria-label="Unit cost">` : ""}
+  <button type="button" class="btn sm warn" data-rm title="Remove this line">✕</button></div>`;
+function linesBlock(kind, rows, title) {
+  return `<div class="xbox"><h3>${title}</h3><div id="xlines">${rows.map(r => lineHtml(kind, r)).join("")}</div>
+    <div class="bar"><button type="button" class="btn sm ghost" id="addline">+ Add ${kind === "sales" ? "another item" : "a part or item"}</button><span id="xsum" style="color:var(--mut)"></span></div></div>`;
+}
+function wireLines(f, kind) {
+  const box = f.querySelector("#xlines"); if (!box) return;
+  const sum = () => {
+    let t = 0, n = 0;
+    if (kind === "sales") { const q = Number(f.elements.qty?.value), p = Number(f.elements.unit_price?.value); if (q && p) { t += q * p; n++; } }
+    box.querySelectorAll("[data-line]").forEach(l => { const q = Number(l.querySelector("[name=li_qty]").value), p = Number(l.querySelector("[name=li_price]").value); if (q && p) { t += q * p; n++; } });
+    f.querySelector("#xsum").textContent = n > 1 || (kind === "repairs" && n) ? `${n} item${n === 1 ? "" : "s"}, KES ${kes(t)}${kind === "repairs" ? " (parts and items, before labour)" : " in total"}` : "";
+  };
+  box.onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { b.closest("[data-line]").remove(); sum(); } };
+  box.onchange = e => {
+    const l = e.target.closest("[data-line]"); if (!l) return;
+    if (e.target.name === "li_item") {
+      const o = e.target.selectedOptions[0], nm = l.querySelector("[name=li_name]");
+      nm.disabled = !!e.target.value; if (e.target.value) { nm.value = ""; const p = l.querySelector("[name=li_price]"); if (!Number(p.value) && o.dataset.price) p.value = o.dataset.price; }
+    }
+    sum();
+  };
+  box.oninput = sum;
+  f.querySelector("#addline").onclick = () => { box.insertAdjacentHTML("beforeend", lineHtml(kind)); box.lastElementChild.querySelector("select").focus(); sum(); };
+  if (kind === "sales") for (const n of ["qty", "unit_price"]) f.elements[n]?.addEventListener("input", sum);
+  sum();
+}
+// read the extra lines; returns { lines } or { error }
+function readLines(f) {
+  const lines = [];
+  for (const l of f.querySelectorAll("#xlines [data-line]")) {
+    const item = l.querySelector("[name=li_item]").value, name = l.querySelector("[name=li_name]").value.trim();
+    const qty = Number(l.querySelector("[name=li_qty]").value), pr = l.querySelector("[name=li_price]").value.trim(), cs = l.querySelector("[name=li_cost]")?.value.trim();
+    if (!item && !name && !pr) continue;              // an empty line is ignored
+    if (!item && !name) return { error: "A line has a price but no item. Pick an item or type its name." };
+    if (!(qty > 0)) return { error: "Each line needs a quantity above zero." };
+    if (!item && pr === "") return { error: `Enter a price for “${name}”.` };
+    if (pr !== "" && !(Number(pr) >= 0)) return { error: "A price cannot be negative." };
+    lines.push({ item_id: item ? Number(item) : null, description: item ? null : name, qty, unit_price: pr === "" ? null : Number(pr), cost: cs ? Number(cs) : null });
+  }
+  return { lines };
+}
+async function repairItems(id) {
+  const r = await db.from("repair_items").select("*").eq("repair_id", id).order("id");
+  return r.error ? [] : (r.data || []);
+}
 async function openForm(key, row) {
   const def = T[key];
   await refreshLookups();
   if (key === "repairs" && row) row = { ...row, ...(await repairChecks(row.id)) };
+  const oldItems = key === "repairs" && row ? await repairItems(row.id) : [];
   const dlg = $("#dlg"), f = $("#dlgForm");
   f.innerHTML = `<h2>${row ? "Edit" : "New"} – ${esc(def.title)}</h2><div class="grid">${def.fields.map(fd => widget(fd, row && row[fd[0]])).join("")}</div>
+    ${key === "sales" && !row ? linesBlock("sales", [], "More items on this sale") : key === "repairs" && (can("repairs.add") || can("repairs.edit")) ? linesBlock("repairs", oldItems, "More parts and items used (as many as you need)") : ""}
     <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  wireLines(f, key);
   f.onsubmit = async e => {
     if (e.submitter.value !== "save") return;
     e.preventDefault();
     const data = readForm(f, def.fields);
+    const xl = (key === "sales" && !row) || key === "repairs" ? readLines(f) : { lines: [] };
+    if (xl.error) return toast(xl.error);
     const checks = key === "repairs" ? { left_with: data.left_with || [], condition: data.condition || [] } : null;
-    if (checks) { delete data.left_with; delete data.condition; }
+    const alt = key === "repairs" ? { alt_name: data.alt_name || null, alt_phone: data.alt_phone || null } : null;
+    if (checks) { delete data.left_with; delete data.condition; delete data.alt_name; delete data.alt_phone; }
     if (def.fields.some(f => f[2] === "account") && "account_id" in data) {
       if (data.payment === "On account" && !data.account_id) return toast("Choose the credit account this is billed to.");
       if (data.payment !== "On account") data.account_id = null;
@@ -139,12 +199,35 @@ async function openForm(key, row) {
     if (key === "repairs" && data.deposit_received && !data.deposit_payment) data.deposit_payment = "Cash";
     if (data.mpesa_ref) data.mpesa_ref = data.mpesa_ref.toUpperCase().replace(/\s+/g, "");
     if (data.deposit_mpesa_ref) data.deposit_mpesa_ref = data.deposit_mpesa_ref.toUpperCase().replace(/\s+/g, "");
-    const q = row ? db.from(def.table).update(data).eq("id", row.id).select("id") : db.from(def.table).insert(Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null))).select("id");
+    let payload = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null));
+    if (key === "sales" && !row && xl.lines.length) {      // several items on one sale: every line is saved together, or none
+      const shared = { sold_on: data.sold_on, customer: data.customer, payment: data.payment, account_id: data.account_id, mpesa_ref: data.mpesa_ref, notes: data.notes };
+      const extra = xl.lines.map(l => ({ ...shared, item_id: l.item_id, item_name: l.description, qty: l.qty, unit_price: l.unit_price ?? 0 }));
+      const all = [payload, ...extra], keys = [...new Set(all.flatMap(o => Object.keys(o)))];
+      payload = all.map(o => Object.fromEntries(keys.map(k => [k, o[k] ?? null])));
+    }
+    const q = row ? db.from(def.table).update(data).eq("id", row.id).select("id") : db.from(def.table).insert(payload).select("id");
     const r = await q; if (r.error) return toast(r.error.message);
     if (row && (!r.data || !r.data.length)) return toast("You can't change this record. Staff can fix only their own entries, within a day.");
     if (checks) {
       const rid = row ? row.id : (Array.isArray(r.data) ? r.data[0]?.id : r.data?.id);
       if (rid) { const c = await db.from("repair_checks").upsert({ repair_id: rid, ...checks, updated_at: new Date().toISOString() }); if (c.error) return toast("Saved, but the checklist was not: " + c.error.message); }
+    }
+    if (key === "sales" && !row && xl.lines.length && Array.isArray(r.data)) {
+      const cs = xl.lines.map((l, i) => l.cost != null && !l.item_id && r.data[i + 1] ? { sale_id: r.data[i + 1].id, unit_cost: l.cost } : null).filter(Boolean);
+      if (cs.length) { const c = await db.from("sale_costs").upsert(cs); if (c.error) toast(c.error.message); }
+    }
+    if (alt && (row || alt.alt_name || alt.alt_phone)) {
+      const rid = row ? row.id : (Array.isArray(r.data) ? r.data[0]?.id : r.data?.id);
+      if (rid) { const c = await db.from("repair_contacts").upsert({ repair_id: rid, ...alt, updated_at: new Date().toISOString() }); if (c.error) return toast("Saved, but the alternative contact was not: " + c.error.message); }
+    }
+    if (key === "repairs") {
+      const rid = row ? row.id : (Array.isArray(r.data) ? r.data[0]?.id : r.data?.id);
+      const sig = l => [l.item_id || "", l.item_id ? "" : l.description, Number(l.qty), l.unit_price == null ? "" : Number(l.unit_price)].join("|"), now = xl.lines.map(sig).join(";"), was = oldItems.map(sig).join(";");
+      if (rid && (now !== was)) {
+        if (oldItems.length) { const d = await db.from("repair_items").delete().eq("repair_id", rid); if (d.error) return toast("Saved, but the parts list was not: " + d.error.message); }
+        if (xl.lines.length) { const c = await db.from("repair_items").insert(xl.lines.map(l => ({ repair_id: rid, item_id: l.item_id, description: l.description, qty: l.qty, unit_price: l.unit_price }))); if (c.error) return toast("Saved, but the parts list was not: " + c.error.message); }
+      }
     }
     if (costVal != null) {
       let id = row ? row.id : (Array.isArray(r.data) ? r.data[0]?.id : r.data?.id);
@@ -162,6 +245,7 @@ async function openForm(key, row) {
     const url = db.storage.from("shop").getPublicUrl(path).data.publicUrl; f.elements[inp.dataset.img].value = url;
     const pv = f.querySelector(`[data-prev="${inp.dataset.img}"]`); pv.src = url; pv.style.display = ""; msg.textContent = "Uploaded.";
   });
+  if (key === "sales" && !row && f.elements.item_id) f.elements.item_id.addEventListener("change", () => { const it = stockItems.find(i => String(i.id) === f.elements.item_id.value); if (it && it.selling_price && !Number(f.elements.unit_price.value)) { f.elements.unit_price.value = it.selling_price; f.elements.unit_price.dispatchEvent(new Event("input")); } });
   const sv = f.querySelector("[data-svc]"); if (sv) sv.onchange = () => { const o = sv.selectedOptions[0]; if (o && o.dataset.price && !row) f.elements.unit_price.value = o.dataset.price; };
   dlg.showModal();
 }
@@ -170,6 +254,10 @@ async function openForm(key, row) {
 async function tablePage(key) {
   const def = T[key];
   const rows = must(await db.from(def.view).select("*").order(def.order, { ascending: false }).limit(500)) || [];
+  if (key === "repairs") {   // alternative contacts, shown beside the main contact
+    const ac = await db.from("repair_contacts").select("*"), m = new Map(((ac.error ? [] : ac.data) || []).map(x => [x.repair_id, x]));
+    rows.forEach(r => { const x = m.get(r.id); r.alt = x ? [x.alt_name, x.alt_phone].filter(Boolean).join(" ") : ""; r.alt_name = x?.alt_name || null; r.alt_phone = x?.alt_phone || null; });
+  }
   window.__rows = rows;
   const cols = def.cols.filter(c => (c[3] !== "owner" || can("costs.view")) && (c[2] !== "acct" || can("accounts.view")));
   const head = cols.map(c => `<th>${esc(c[1])}</th>`).join("") + "<th></th>";
@@ -190,7 +278,7 @@ async function tablePage(key) {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.edit) openForm(key, rows[b.dataset.edit]);
     if (b.dataset.del && confirm("Delete this record? This cannot be undone.")) { const r = await db.from(def.table).delete().eq("id", rows[b.dataset.del].id); if (r.error) toast(r.error.message); else route(); }
-    if (b.dataset.print) { let r = rows[b.dataset.print]; if (def.print === "jobcard") r = { ...r, ...(await repairChecks(r.id)) }; printCard(def.print, r); }
+    if (b.dataset.print) { let r = rows[b.dataset.print]; if (def.print === "jobcard") r = { ...r, ...(await repairChecks(r.id)), items: await repairItems(r.id) }; printCard(def.print, r); }
     if (b.dataset.pay) { const r = rows[b.dataset.pay]; mpayDialog(def.mpay === "repair"
       ? { phone: r.contact, amount: Math.max(0, Math.floor(r.balance_due || 0)) || "", ref: "JC-" + String(r.id).padStart(4, "0"), purpose: "Repair payment", auto: true, name: r.customer_name }
       : { phone: r.contact, amount: Math.max(0, Math.floor(r.balance || 0)) || "", ref: r.job_no, purpose: "Job payment " + r.job_no, auto: true, name: r.client_name }); }
@@ -631,13 +719,15 @@ const kv = (a) => `<table>${a.map(([k, v]) => `<tr><th style="width:30%">${esc(k
 async function repairChecks(id) {
   const r = await db.from("repair_checks").select("*").eq("repair_id", id).limit(1);
   const x = (r.data && (Array.isArray(r.data) ? r.data[0] : r.data)) || {};
-  return { left_with: x.left_with || [], condition: x.condition || [] };
+  const c = await db.from("repair_contacts").select("*").eq("repair_id", id).limit(1);
+  const y = (c.data && (Array.isArray(c.data) ? c.data[0] : c.data)) || {};
+  return { left_with: x.left_with || [], condition: x.condition || [], alt_name: y.alt_name || null, alt_phone: y.alt_phone || null };
 }
 const tickLine = (all, have) => all.map(x => `${have.includes(x) ? "[✔]" : "[ ]"} ${esc(x)}`).join(" &nbsp;");
 function printCard(kind, r) {
   let h = "";
-  if (kind === "jobcard") h = head("JOB CARD", "JC-" + String(r.id).padStart(4, "0")) + kv([["Customer", r.customer_name], ["Contact", r.contact], ["Date received", r.received_on], ["Item", [r.item_type, r.brand_model].filter(Boolean).join(" – ")], ["Serial / IMEI", r.serial_no], ["Fault reported", r.fault],
-    ["Diagnosis", r.diagnosis], ["Parts (KES)", kes(r.parts_cost)], ["Labor (KES)", kes(r.labor_cost)], ["Estimated total (KES)", kes(r.total_cost)], ["Refundable deposit (KES)", kes(r.deposit_received)]]) +
+  if (kind === "jobcard") h = head("JOB CARD", "JC-" + String(r.id).padStart(4, "0")) + kv([["Customer", r.customer_name], ["Contact", r.contact], ...(r.alt_phone || r.alt_name ? [["Alternative contact", [r.alt_name, r.alt_phone].filter(Boolean).join(" – ")]] : []), ["Date received", r.received_on], ["Item", [r.item_type, r.brand_model].filter(Boolean).join(" – ")], ["Serial / IMEI", r.serial_no], ["Fault reported", r.fault],
+    ["Diagnosis", r.diagnosis], ...((r.items && r.items.length) || r.part1_name || r.part2_name ? [["Parts and items", [r.part1_name && `${r.part1_name} × ${r.part1_qty ?? 1}`, r.part2_name && `${r.part2_name} × ${r.part2_qty ?? 1}`, ...(r.items || []).map(i => `${i.description} × ${i.qty}`)].filter(Boolean).join("; ")]] : []), ["Parts (KES)", kes(r.parts_cost)], ["Labor (KES)", kes(r.labor_cost)], ["Estimated total (KES)", kes(r.total_cost)], ["Refundable deposit (KES)", kes(r.deposit_received)]]) +
     `<div class="box">Left with device: ${tickLine(LEFT_WITH, r.left_with || [])}<br>Condition: ${tickLine(CONDITION, r.condition || [])}</div>
      <div class="box"><b>Terms</b><br>1. Bring this card when collecting your device.<br>2. The estimate may change after full diagnosis; we will contact you first.<br>3. Please back up your data; we are not responsible for data lost during repair.<br>4. Devices not collected within 30 days of being notified may be charged a storage fee.<br>5. 30-day warranty on the replaced part only. Excludes physical or water damage.<br>6. A deposit is deducted from your final bill or refunded.</div>
      <p><b>Track your repair online:</b> ${esc(portalUrl("JC-" + String(r.id).padStart(4, "0")))} &nbsp;(Job card <b>JC-${String(r.id).padStart(4, "0")}</b> + the phone number you gave us)</p>
@@ -1067,7 +1157,7 @@ async function auditPage() {
 async function refreshLookups() {
   const li = must(await db.from("list_items").select("*").order("value")) || [];
   lists = { item_type: li.filter(x => x.kind === "item_type"), brand: li.filter(x => x.kind === "brand"), stock_type: li.filter(x => x.kind === "stock_type") };
-  stockItems = must(await db.from("v_stock").select("id,code,description,on_hand").order("code")) || [];
+  stockItems = must(await db.from("v_stock").select("id,code,description,on_hand,selling_price").order("code")) || [];
   suppliers = must(await db.from("suppliers").select("id,name").order("name")) || [];
   accounts = can("accounts.view") ? (must(await db.from("credit_accounts").select("id,name,active,credit_limit").order("name")) || []) : [];
   catalog = (must(await db.from("service_catalog").select("*").order("name")) || []).filter(c => c.active !== false);

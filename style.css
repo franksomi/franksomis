@@ -75,3 +75,9 @@ header .btn.ghost,.hero .btn.ghost{background:transparent;color:#fff;border:1px 
 .attrow{display:flex;flex-wrap:wrap;gap:8px}.att{display:flex;gap:8px;align-items:center;padding:8px 12px;border-radius:10px;background:rgba(255,145,77,.14);color:var(--txt);text-decoration:none;border:1px solid rgba(255,145,77,.4)}.att b{font-size:16px}.att:hover{filter:brightness(.97)}
 .dl{font-size:12px;color:var(--mut)}.dl.up{color:#067647}.dl.dn{color:#b42318}
 @media(max-width:600px){.hbr{grid-template-columns:minmax(70px,34%) 1fr auto}}
+
+/* v17: several items on a sale, many parts on a repair */
+.xbox{margin-top:14px;border:1px dashed var(--line,#cbd5e1);border-radius:10px;padding:10px 12px}
+.xbox h3{margin:0 0 8px;font-size:14px}
+.xline{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;align-items:center}
+.xline .xi{flex:2 1 220px;min-width:0}.xline .xn{flex:2 1 180px;min-width:0}.xline .xq{flex:0 1 70px;width:70px}.xline .xp{flex:0 1 100px;width:100px}
