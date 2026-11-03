@@ -79,7 +79,7 @@ const T = {
     fields: [["name", "Supplier name", "text", { req: 1 }], ["contact_person", "Contact person", "text"], ["phone", "Phone", "text"], ["location", "Location", "text"], ["supplies", "What they supply", "text", { full: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
 };
 const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
-  ["docs", "Quote / Invoice / Receipt", "docs.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
+  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
   ["mpay", "M-Pesa checkout", "mpay.use"], ["sms", "SMS messages", "sms.manage"], ["eod", "End of day", "eod.view"], ["monthly", "Monthly report", "reports.view+costs.view"], ["summary", "Year summary", "reports.view+costs.view"],
   ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["payables", "Supplier payables", "payables.view"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["users", "Users & roles", "users.manage"]];
 const navFor = () => NAV.filter(n => !n[2] || can(n[2]));
@@ -410,6 +410,7 @@ async function dashboard() {
   add(d.orders_open, "online order(s) to handle", "orders", "orders");
   add(d.enquiries_new, "new website enquiry(ies)", "enquiries", "enquiries");
   add(d.chat_waiting, "live chat(s) waiting", "chat", "chat");
+  add(ex.etims_missing, "issued invoice(s) / credit note(s) missing an eTIMS number", "docs", "docs");
   if (ex.payables) add(Number(ex.payables.overdue) > 0 ? 1 : 0, "supplier bill(s) overdue: KES " + kes(ex.payables.overdue), "payables", "payables");
   if (ex.payables && Number(ex.payables.due7) > Number(ex.payables.overdue)) add(1, "KES " + kes(Number(ex.payables.due7) - Number(ex.payables.overdue)) + " supplier bills due this week", "payables", "payables");
   if (ex.receivables) add(Number(ex.receivables.overdue) > 0 ? 1 : 0, "credit account balance(s) over 30 days: KES " + kes(ex.receivables.overdue), "accounts", "accounts");
@@ -462,18 +463,21 @@ async function accountsPage() {
   $("#atb").onclick = e => { const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.st) statementDialog(byId(b.dataset.st)); if (b.dataset.rc) receiveDialog(byId(b.dataset.rc)); if (b.dataset.ch) chargeDialog(byId(b.dataset.ch)); if (b.dataset.ed) accountForm(byId(b.dataset.ed)); };
 }
-function accountForm(a) {
+async function accountForm(a) {
   const f = $("#dlgForm"), dlg = $("#dlg");
+  if (a && a.kra_pin === undefined) { const pr = await db.from("credit_accounts").select("kra_pin").eq("id", a.id); if (!pr.error) a = { ...a, kra_pin: ((Array.isArray(pr.data) ? pr.data[0] : pr.data) || {}).kra_pin || null }; }
   f.innerHTML = `<h2>${a ? "Edit" : "New"} credit account</h2><div class="grid">
     <label class="full">Customer / business name<input name="name" value="${esc(a?.name || "")}" required></label><label>Contact person<input name="contact_person" value="${esc(a?.contact_person || "")}"></label>
     <label>Phone (for SMS)<input name="phone" value="${esc(a?.phone || "")}" inputmode="tel"></label><label>Email<input name="email" value="${esc(a?.email || "")}"></label><label>Credit limit (KES, 0 = no limit)<input name="credit_limit" type="number" min="0" step="1" value="${Number(a?.credit_limit || 0)}"></label>
-    <label class="full">Address<input name="address" value="${esc(a?.address || "")}"></label><label class="full">Notes (private)<input name="notes" value="${esc(a?.notes || "")}"></label>
+    <label>KRA PIN (printed on invoices)<input name="kra_pin" value="${esc(a?.kra_pin || "")}" maxlength="11" placeholder="e.g. P051234567Z" autocomplete="off"></label><label class="full">Address<input name="address" value="${esc(a?.address || "")}"></label><label class="full">Notes (private)<input name="notes" value="${esc(a?.notes || "")}"></label>
     <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="active" ${!a || a.active ? "checked" : ""} style="width:auto"> Account is active (can be charged)</label>
     <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="sms_optout" ${a?.sms_optout ? "checked" : ""} style="width:auto"> Do NOT send this customer SMS</label></div>
     <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
   f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements;
     const d = { name: el.name.value.trim(), contact_person: el.contact_person.value.trim() || null, phone: el.phone.value.trim() || null, email: el.email.value.trim() || null, address: el.address.value.trim() || null,
       notes: el.notes.value.trim() || null, credit_limit: Number(el.credit_limit.value || 0), active: el.active.checked, sms_optout: el.sms_optout.checked };
+    const pin = el.kra_pin.value.trim().toUpperCase().replace(/\s+/g, ""); if (pin && !/^[A-Z][0-9]{9}[A-Z]$/.test(pin)) return toast("A KRA PIN looks like P051234567Z: a letter, 9 digits and a letter.");
+    if (pin || (a && a.kra_pin !== undefined)) d.kra_pin = pin || null;
     const r = a ? await db.from("credit_accounts").update(d).eq("id", a.id).select("id") : await db.from("credit_accounts").insert(d).select("id"); if (r.error) return toast(r.error.message);
     dlg.close(); toast("Saved"); await refreshLookups(); route(); };
   dlg.showModal();
@@ -670,47 +674,261 @@ async function listsPage() {
 }
 
 // ---- documents (quotation / invoice / receipt) --------------------------------
+// ---- documents: Draft -> Issued -> Void; quotations, invoices, receipts, delivery notes, credit notes ------------------
+let all_docs_cache = [];
+let COMPANY = { vat_registered: false, vat_rate: 16, etims_registered: true };
+async function loadCompany() {
+  const r = await db.from("company_settings").select("*"); if (r.error || !r.data) return COMPANY;
+  const m = Object.fromEntries(r.data.map(x => [x.key, x.value]));
+  COMPANY = { vat_registered: m.vat_registered === "true", vat_rate: Number(m.vat_rate || 16), etims_registered: m.etims_registered !== "false" };
+  return COMPANY;
+}
+const DOC_PFX = { Quotation: "QT", Invoice: "INV", Receipt: "RCT", "Delivery note": "DN", "Credit note": "CN" };
+const docNo = r => r.doc_no || ((DOC_PFX[r.doc_type] || "DOC") + "-" + String(r.id).padStart(4, "0"));
+const docSt = r => r.status || "Draft";
+const isImp = r => r.origin === "import";
 function docTotals(d) {
-  const items = d.items || [], sub = items.reduce((s, i) => s + Number(i.qty || 0) * Number(i.price || 0), 0);
-  const vat = (sub - Number(d.discount || 0)) * Number(d.vat_rate || 0) / 100, total = sub - Number(d.discount || 0) + vat;
+  const items = d.items || [], sub = items.reduce((s, i) => s + Number(i.qty || 0) * Number(i.price || 0), 0), disc = Number(d.discount || 0);
+  if (d.stated_total != null && d.stated_total !== "") { const t = Number(d.stated_total); return { sub, vat: 0, total: t, balance: t - Number(d.paid_before || 0), stated: true, lines: sub - disc }; }
+  const vat = (sub - disc) * Number(d.vat_rate || 0) / 100, total = sub - disc + vat;
   return { sub, vat, total, balance: total - Number(d.paid_before || 0) };
 }
+const EV_LABEL = { issued: "Issued", revised: "Revised", etims: "eTIMS number", voided: "Voided", cancelled: "Cancelled with credit note", converted: "Converted to invoice", delivery_note: "Delivery note made", created: "Created" };
 async function docsPage() {
-  const rows = must(await db.from("documents").select("*").order("id", { ascending: false }).limit(100)) || [];
-  $("#view").innerHTML = `<h2>Quotation · Invoice · Receipt</h2><div class="bar">${can("docs.add") ? `<button class="btn" id="nd">+ New document</button>` : ""}</div>
-    <div class="wrap"><table><thead><tr><th>No.</th><th>Type</th><th>Date</th><th>Customer</th><th>Total</th><th></th></tr></thead><tbody id="tb">
-    ${rows.map((r, i) => `<tr><td>${docNo(r)}</td><td>${r.doc_type}</td><td>${esc(r.doc_date)}</td><td>${esc(r.customer)}</td><td class="n">${kes(docTotals(r).total)}</td>
-    <td>${can("docs.edit") ? `<button class="btn sm" data-e="${i}">Edit</button>` : ""} <button class="btn sm pbtn" data-p="${i}">Print</button>${can("docs.delete") ? ` <button class="btn sm warn" data-d="${i}">Delete</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="6">No documents yet.</td></tr>`}</tbody></table></div>`;
+  await Promise.all([loadCompany(), refreshLookups()]);
+  const all = (must(await db.from("documents").select("*").order("id", { ascending: false }).limit(2000)) || []).sort((a, b) => String(b.doc_date || "").localeCompare(String(a.doc_date || "")) || b.id - a.id);
+  all_docs_cache = all;
+  const flt = { type: "", st: "", q: "" };
+  const stTag = r => { const s = docSt(r); return `<span class="tag ${s === "Void" ? "bad" : s === "Draft" ? "draft" : "ok"}">${s}</span>${isImp(r) ? ` <span class="tag imp">Imported</span>` : ""}`; };
+  const etTag = r => ["Invoice", "Credit note"].includes(r.doc_type) && !isImp(r) && docSt(r) === "Issued" ? (r.etims_no ? `<small>${esc(r.etims_no)}</small>` : (COMPANY.etims_registered ? `<span class="tag bad">eTIMS missing</span>` : "")) : "";
+  let view = [];
+  const btns = (r, i) => {
+    const st = docSt(r), b = [], v19 = "status" in r;
+    if (!isImp(r) && st === "Draft") {
+      if (can("docs.edit")) b.push(`<button class="btn sm" data-e="${i}">Edit</button>`);
+      if (v19 && can("docs.issue")) b.push(`<button class="btn sm" style="background:#12b76a" data-iss="${i}">Issue</button>`);
+    }
+    b.push(`<button class="btn sm pbtn" data-p="${i}">Print</button>`);
+    if (!isImp(r) && st === "Issued") {
+      if (can("docs.issue") && r.doc_type !== "Credit note") b.push(`<button class="btn sm ghost" data-rev="${i}">Revise</button>`);
+      if (can("docs.issue") && ["Invoice", "Credit note"].includes(r.doc_type)) b.push(`<button class="btn sm ghost" data-et="${i}">eTIMS no.</button>`);
+      if (r.doc_type === "Invoice" && can("docs.add")) b.push(`<button class="btn sm ghost" data-dn="${i}">Delivery note</button>`);
+      if (r.doc_type === "Invoice" && can("docs.void")) b.push(`<button class="btn sm warn" data-cx="${i}">Cancel with credit note</button>`);
+      else if (can("docs.void") && !["Invoice", "Credit note"].includes(r.doc_type)) b.push(`<button class="btn sm warn" data-vd="${i}">Void</button>`);
+    }
+    if (r.doc_type === "Quotation" && st !== "Void" && v19 && can("docs.add")) b.push(`<button class="btn sm ghost" data-cv="${i}">Convert to invoice</button>`);
+    if (v19) b.push(`<button class="btn sm ghost" data-h="${i}">History</button>`);
+    if (!isImp(r) && st === "Draft" && can("docs.delete")) b.push(`<button class="btn sm warn" data-d="${i}">Delete</button>`);
+    return b.join(" ");
+  };
+  const draw = () => {
+    const q = flt.q.toLowerCase();
+    view = all.filter(r => (!flt.type || r.doc_type === flt.type) && (!flt.st || (flt.st === "Imported" ? isImp(r) : docSt(r) === flt.st)) && (!q || [docNo(r), r.customer, r.lpo_no, r.reference, r.etims_no, r.project].join(" ").toLowerCase().includes(q)));
+    $("#tb").innerHTML = view.slice(0, 300).map((r, i) => `<tr class="${docSt(r) === "Void" ? "low" : ""}"><td><b>${esc(docNo(r))}</b>${(r.revision || 1) > 1 ? ` <small>rev ${r.revision}</small>` : ""}</td><td>${esc(r.doc_type)}</td><td>${stTag(r)}</td><td>${esc(r.doc_date || "—")}</td><td>${esc(r.customer)}${r.lpo_no ? `<br><small>LPO ${esc(r.lpo_no)}</small>` : ""}</td>
+      <td class="n">${["Delivery note"].includes(r.doc_type) ? "" : kes(docTotals(r).total)}</td><td>${etTag(r)}</td><td class="acts">${btns(r, i)}</td></tr>`).join("") || `<tr><td colspan="8">No documents match.</td></tr>`;
+    $("#cnt").textContent = view.length > 300 ? `Showing 300 of ${view.length}. Use the search to narrow it.` : `${view.length} document(s)`;
+  };
+  $("#view").innerHTML = `<h2>Quotations · Invoices · Receipts · Delivery notes</h2>
+    <div class="bar">${can("docs.add") ? `<button class="btn" id="nd">+ New document</button>` : ""}${can("settings.manage") ? `<button class="btn ghost" id="tax">Tax settings</button>` : ""}${me.role === "owner" ? `<button class="btn ghost" id="imp">Import history</button>` : ""}
+      <select id="ft"><option value="">All types</option>${["Quotation", "Invoice", "Receipt", "Delivery note", "Credit note"].map(x => `<option>${x}</option>`).join("")}</select>
+      <select id="fs"><option value="">All statuses</option>${["Draft", "Issued", "Void", "Imported"].map(x => `<option>${x}</option>`).join("")}</select>
+      <input id="fq" placeholder="Search number, customer, LPO, eTIMS…" style="max-width:280px"><span id="cnt" style="color:var(--mut)"></span></div>
+    <p style="color:var(--mut);margin:0 0 8px">${COMPANY.vat_registered ? `VAT is on (${COMPANY.vat_rate}%).` : "Not VAT-registered: no VAT line is shown or printed."} Only <b>drafts</b> can be edited or deleted. An issued invoice is <b>revised</b> (same number, history kept) or <b>cancelled with a credit note</b>.</p>
+    <div class="wrap"><table><thead><tr><th>No.</th><th>Type</th><th>Status</th><th>Date</th><th>Customer</th><th>Total</th><th>eTIMS</th><th></th></tr></thead><tbody id="tb"></tbody></table></div>`;
+  draw();
   if ($("#nd")) $("#nd").onclick = () => docForm();
-  $("#tb").onclick = async e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.e) docForm(rows[b.dataset.e]); if (b.dataset.p) printCard("document", rows[b.dataset.p]);
-    if (b.dataset.d && confirm("Delete this document? This cannot be undone.")) { const r = await db.from("documents").delete().eq("id", rows[b.dataset.d].id); if (r.error) toast(r.error.message); else docsPage(); } };
+  if ($("#tax")) $("#tax").onclick = taxDialog;
+  if ($("#imp")) $("#imp").onclick = importDialog;
+  $("#ft").onchange = e => { flt.type = e.target.value; draw(); }; $("#fs").onchange = e => { flt.st = e.target.value; draw(); }; $("#fq").oninput = e => { flt.q = e.target.value; draw(); };
+  const rpc = async (fn, args, ok) => { const r = await db.rpc(fn, args); if (r.error) { toast(r.error.message); return null; } if (ok) toast(ok(r.data)); return r.data; };
+  $("#tb").onclick = async e => {
+    const b = e.target.closest("button"); if (!b) return; const D = b.dataset, row = k => view[D[k]];
+    if (D.e) { const r = row("e"); r.doc_type === "Delivery note" ? dnForm(r) : docForm(r); }
+    else if (D.p) printCard("document", row("p"));
+    else if (D.iss) { const r = row("iss"); if (!confirm(`Issue ${docNo(r)}? Once issued it cannot be edited or deleted: it can only be revised or cancelled.`)) return; if (await rpc("doc_issue", { p_id: r.id }, x => "Issued " + x.doc_no + (r.doc_type === "Invoice" ? ". Add its eTIMS number when you have it." : ""))) docsPage(); }
+    else if (D.rev) docForm(row("rev"), { revise: true });
+    else if (D.et) etimsDialog(row("et"));
+    else if (D.dn) { const r = row("dn"); const x = await rpc("doc_delivery_note", { p_invoice: r.id }); if (x) { await docsPage(); const nd = (await db.from("documents").select("*").eq("id", x.id)).data; dnForm(Array.isArray(nd) ? nd[0] : nd); } }
+    else if (D.cx) reasonDialog(row("cx"), "Cancel invoice with a credit note", "This issues a credit note for the whole invoice and marks the invoice void. If it was charged to a credit account the balance is reversed. This cannot be undone.", "doc_cancel_invoice", "Cancel invoice", x => "Credit note " + x.credit_note + " issued");
+    else if (D.vd) reasonDialog(row("vd"), "Void document", "A voided document stays on record but no longer counts.", "doc_void", "Void it", () => "Voided");
+    else if (D.cv) { const r = row("cv"); const x = await rpc("doc_convert_quote", { p_id: r.id }); if (x) { toast("Draft invoice " + x.doc_no + " created"); await docsPage(); const nd = (await db.from("documents").select("*").eq("id", x.id)).data; docForm(Array.isArray(nd) ? nd[0] : nd); } }
+    else if (D.h) historyDialog(row("h"));
+    else if (D.d && confirm("Delete this draft? This cannot be undone.")) { const r = await db.from("documents").delete().eq("id", row("d").id); if (r.error) toast(r.error.message); else docsPage(); }
+  };
 }
-const docNo = r => ({ Quotation: "QT", Invoice: "INV", Receipt: "RCT" }[r.doc_type]) + "-" + String(r.id).padStart(4, "0");
-function docForm(row) {
-  const d = row ? { ...row, items: [...row.items] } : { doc_type: "Quotation", doc_date: new Date().toISOString().slice(0, 10), items: [{ desc: "", qty: 1, price: 0 }], vat_rate: 0, discount: 0, paid_before: 0 };
-  const f = $("#dlgForm"), draw = () => {
-    f.innerHTML = `<h2>${row ? "Edit" : "New"} document</h2><div class="grid">
-      <label>Type<select name="doc_type">${["Quotation", "Invoice", "Receipt"].map(x => `<option ${x === d.doc_type ? "selected" : ""}>${x}</option>`).join("")}</select></label>
-      <label>Date<input name="doc_date" type="date" value="${esc(d.doc_date)}"></label>
-      <label>Customer<input name="customer" value="${esc(d.customer)}" required></label><label>Contact<input name="contact" value="${esc(d.contact)}"></label>
-      <label class="full">Address / site<input name="address" value="${esc(d.address)}"></label><label>Reference (job no., LPO…)<input name="reference" value="${esc(d.reference)}"></label>
-      <label>VAT % (0 if not registered)<input name="vat_rate" type="number" min="0" step="any" value="${d.vat_rate}"></label>
-      <label>Discount (KES)<input name="discount" type="number" min="0" step="any" value="${d.discount}"></label>
-      <label>Already paid (KES)<input name="paid_before" type="number" min="0" step="any" value="${d.paid_before}"></label></div>
-      <h3>Items</h3>${d.items.map((it, i) => `<div class="grid" style="grid-template-columns:3fr 1fr 1fr auto;margin-bottom:6px"><input data-i="${i}" data-f="desc" value="${esc(it.desc)}" placeholder="Description"><input data-i="${i}" data-f="qty" type="number" min="0" step="any" value="${it.qty}"><input data-i="${i}" data-f="price" type="number" min="0" step="any" value="${it.price}"><button type="button" class="btn sm warn" data-rm="${i}">×</button></div>`).join("")}
+function reasonDialog(r, title, text, fn, label, msg) {
+  const f = $("#dlgForm");
+  f.innerHTML = `<h2>${esc(title)} – ${esc(docNo(r))}</h2><p style="margin-top:0">${esc(text)}</p><label class="full">Reason (kept in the history)<input name="why" required maxlength="200" autocomplete="off"></label>
+    <div class="bar" style="margin-top:14px"><button class="btn warn" value="go">${esc(label)}</button><button class="btn ghost" value="cancel" formnovalidate>Back</button></div>`;
+  f.onsubmit = async e => { if (e.submitter.value !== "go") return; e.preventDefault();
+    const args = fn === "doc_void" || fn === "doc_cancel_invoice" ? { p_id: r.id, p_reason: f.elements.why.value.trim() } : {};
+    const x = await db.rpc(fn, args); if (x.error) return toast(x.error.message); $("#dlg").close(); toast(msg(x.data)); docsPage(); };
+  $("#dlg").showModal();
+}
+function etimsDialog(r) {
+  const f = $("#dlgForm");
+  f.innerHTML = `<h2>eTIMS number – ${esc(docNo(r))}</h2><p style="margin-top:0">Type the invoice number that KRA eTIMS gave this ${esc(r.doc_type.toLowerCase())}. It is printed on the PDF.</p><div class="grid">
+    <label>eTIMS invoice number<input name="no" value="${esc(r.etims_no || "")}" maxlength="60" autocomplete="off"></label><label>eTIMS date (optional)<input name="dt" type="date" value="${esc(r.etims_date || iso(new Date()))}"></label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button>${r.etims_no ? `<button class="btn ghost" value="clear" formnovalidate>Clear</button>` : ""}<button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.onsubmit = async e => { const v = e.submitter.value; if (v !== "save" && v !== "clear") return; e.preventDefault();
+    const x = await db.rpc("doc_set_etims", { p_id: r.id, p_no: v === "clear" ? null : f.elements.no.value.trim() || null, p_date: v === "clear" ? null : f.elements.dt.value || null });
+    if (x.error) return toast(x.error.message); $("#dlg").close(); toast("Saved"); docsPage(); };
+  $("#dlg").showModal();
+}
+async function historyDialog(r) {
+  const ev = (await db.from("document_events").select("*").eq("doc_id", r.id).order("id", { ascending: true })).data || [];
+  let names = {}; const pr = await db.from("profiles").select("id,full_name"); if (!pr.error && pr.data) pr.data.forEach(p => names[p.id] = p.full_name);
+  const f = $("#dlgForm");
+  f.innerHTML = `<h2>History – ${esc(docNo(r))}</h2>${isImp(r) ? `<p>Imported from your old files${r.history_id ? ` (${esc(r.history_id)})` : ""}. ${r.business_line ? "Business line: " + esc(r.business_line) + ". " : ""}${r.source_files ? "Source: " + esc(r.source_files) + "." : ""}</p>${r.import_flags ? `<p class="box"><b>Notes from the import:</b> ${esc(r.import_flags)}</p>` : ""}` : ""}
+    ${r.source_doc_id ? `<p>Linked to document no. ${esc(String((all_docs_cache.find(x => x.id === r.source_doc_id) || {}).doc_no || r.source_doc_id))}.</p>` : ""}
+    <table><thead><tr><th>When</th><th>What</th><th>Who</th><th>Note</th></tr></thead><tbody>${ev.map((e, i) => `<tr><td>${esc(String(e.at || "").replace("T", " ").slice(0, 16))}</td><td>${esc(EV_LABEL[e.event] || e.event)}</td><td>${esc(names[e.by_user] || "staff")}</td><td>${esc(e.note || "")}${e.snapshot ? ` <button type="button" class="btn sm ghost" data-ps="${i}">Print old version</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="4">No history recorded.</td></tr>`}</tbody></table>
+    <div class="bar" style="margin-top:14px"><button class="btn ghost" value="cancel" formnovalidate>Close</button></div>`;
+  f.onclick = e => { const b = e.target.closest("[data-ps]"); if (b) printCard("document", { ...ev[b.dataset.ps].snapshot, _old: true }); };
+  f.onsubmit = null; $("#dlg").showModal();
+}
+async function docForm(row, opts = {}) {
+  await Promise.all([loadCompany(), refreshLookups()]);
+  const revise = !!opts.revise, blank = () => ({ desc: "", qty: 1, price: 0 });
+  const d = row ? { ...row, items: (row.items || []).map(x => ({ ...x })) } : { doc_type: opts.type || "Quotation", doc_date: iso(new Date()), items: [blank()], discount: 0, paid_before: 0 };
+  if (!d.items.length) d.items.push(blank());
+  const f = $("#dlgForm"), v19 = !row || "status" in row, rate = () => revise ? Number(d.vat_rate || 0) : (COMPANY.vat_registered ? COMPANY.vat_rate : 0);
+  const accts = accounts.filter(a => a.active || a.id === d.account_id);
+  const draw = () => {
+    const inv = d.doc_type === "Invoice";
+    f.innerHTML = `<h2>${revise ? "Revise " + esc(docNo(row)) + " (revision " + ((row.revision || 1) + 1) + ")" : row ? "Edit draft " + esc(docNo(row)) : "New document"}</h2>${revise ? `<p style="margin-top:0">The number stays the same. The earlier version is kept in the history.</p>` : ""}<div class="grid">
+      <label>Type${revise ? `<input value="${esc(d.doc_type)}" disabled>` : `<select name="doc_type">${["Quotation", "Invoice", "Receipt"].map(x => `<option ${x === d.doc_type ? "selected" : ""}>${x}</option>`).join("")}</select>`}</label>
+      <label>Date<input name="doc_date" type="date" value="${esc(d.doc_date || "")}"></label>
+      ${inv && !revise && accts.length ? `<label class="full">Charge to a credit account (optional: puts the balance on the customer's monthly account when issued)<select name="account_id"><option value="">— not on account —</option>${accts.map(a => `<option value="${a.id}" ${String(a.id) === String(d.account_id) ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></label>` : ""}
+      <label>Customer<input name="customer" value="${esc(d.customer)}" required></label><label>Customer KRA PIN<input name="customer_pin" value="${esc(d.customer_pin || "")}" maxlength="11" placeholder="e.g. P051234567Z" autocomplete="off"></label>
+      <label>Contact<input name="contact" value="${esc(d.contact)}"></label><label>Client LPO / PO number<input name="lpo_no" value="${esc(d.lpo_no || "")}" placeholder="e.g. P-ORD_17448" autocomplete="off"></label>
+      <label class="full">Address / site<input name="address" value="${esc(d.address)}"></label><label class="full">Reference (job no., project…)<input name="reference" value="${esc(d.reference)}"></label>
+      <label>Discount (KES)<input name="discount" type="number" min="0" step="any" value="${d.discount || 0}"></label>
+      ${d.doc_type !== "Quotation" ? `<label>Already paid (KES)<input name="paid_before" type="number" min="0" step="any" value="${d.paid_before || 0}"></label>` : ""}</div>
+      ${inv && !revise ? `<p style="color:var(--mut);margin:6px 0 0">The eTIMS invoice number is added after you issue the invoice (button “eTIMS no.” in the list).</p>` : ""}
+      <h3>Items</h3>${d.items.map((it, i) => `<div class="grid" style="grid-template-columns:3fr 1fr 1fr auto;margin-bottom:6px"><input data-i="${i}" data-f="desc" value="${esc(it.desc)}" placeholder="Description"><input data-i="${i}" data-f="qty" type="number" min="0" step="any" value="${it.qty}"><input data-i="${i}" data-f="price" type="number" min="0" step="any" value="${it.price}"><button type="button" class="btn sm ghost" data-rm="${i}" title="Remove this line">✕</button></div>`).join("")}
       <button type="button" class="btn sm ghost" id="addl">+ line</button> <b id="tot" style="margin-left:12px"></b>
-      <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+      ${revise ? `<label class="full" style="margin-top:10px">Why are you revising it? (kept in the history)<input name="why" required maxlength="200" autocomplete="off"></label>` : ""}
+      <div class="bar" style="margin-top:14px">${revise ? `<button class="btn" value="revise">Save revision</button>` : `<button class="btn" value="save">${v19 ? "Save draft" : "Save"}</button>${v19 && can("docs.issue") ? `<button class="btn" style="background:#12b76a" value="issue">Save and issue</button>` : ""}`}<button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
     sync();
   };
-  const collect = () => { for (const k of ["doc_type", "doc_date", "customer", "contact", "address", "reference"]) d[k] = f.elements[k].value || null; for (const k of ["vat_rate", "discount", "paid_before"]) d[k] = Number(f.elements[k].value) || 0;
-    f.querySelectorAll("[data-f]").forEach(el => d.items[el.dataset.i][el.dataset.f] = el.dataset.f === "desc" ? el.value : Number(el.value) || 0); };
-  const sync = () => { $("#tot").textContent = "Total KES " + kes(docTotals(d).total); };
-  f.oninput = () => { collect(); sync(); };
-  f.onclick = e => { if (e.target.id === "addl") { collect(); d.items.push({ desc: "", qty: 1, price: 0 }); draw(); } if (e.target.dataset.rm) { collect(); d.items.splice(e.target.dataset.rm, 1); if (!d.items.length) d.items.push({ desc: "", qty: 1, price: 0 }); draw(); } };
-  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); collect();
-    const { id, created_at, ...data } = d; if (!data.doc_date) delete data.doc_date; const r = row ? await db.from("documents").update(data).eq("id", row.id) : await db.from("documents").insert(data);
-    if (r.error) return toast(r.error.message); $("#dlg").close(); toast("Saved"); route(); };
+  const collect = () => {
+    for (const k of ["doc_type", "doc_date", "customer", "customer_pin", "contact", "lpo_no", "address", "reference"]) if (f.elements[k]) d[k] = f.elements[k].value.trim() || null;
+    for (const k of ["discount", "paid_before"]) if (f.elements[k]) d[k] = Number(f.elements[k].value) || 0;
+    if (f.elements.account_id) d.account_id = f.elements.account_id.value ? Number(f.elements.account_id.value) : null;
+    f.querySelectorAll("[data-f]").forEach(el => d.items[el.dataset.i][el.dataset.f] = el.dataset.f === "desc" ? el.value : Number(el.value) || 0);
+  };
+  const sync = () => { const t = docTotals({ ...d, vat_rate: rate() }); $("#tot").textContent = (rate() > 0 ? `Subtotal ${kes(t.sub - Number(d.discount || 0))} + VAT ${rate()}% ${kes(t.vat)} = ` : "") + "Total KES " + kes(t.total); };
+  f.oninput = e => { if (!$("#tot")) return; if (e.target.name === "doc_type") { collect(); draw(); return; } collect(); sync(); };
+  f.onchange = e => { if (!$("#tot")) return; if (e.target.name === "account_id") { const a = accounts.find(x => String(x.id) === e.target.value); collect(); if (a) { d.customer = a.name; d.customer_pin = a.kra_pin || d.customer_pin; draw(); } } };
+  f.onclick = e => { if (!$("#tot")) return; if (e.target.id === "addl") { collect(); d.items.push(blank()); draw(); } if (e.target.dataset.rm) { collect(); d.items.splice(e.target.dataset.rm, 1); if (!d.items.length) d.items.push(blank()); draw(); } };
+  f.onsubmit = async e => {
+    const act = e.submitter.value; if (!["save", "issue", "revise"].includes(act)) return; e.preventDefault(); collect();
+    if (!d.customer) return toast("Add the customer.");
+    if (d.customer_pin && !/^[A-Za-z][0-9]{9}[A-Za-z]$/.test(d.customer_pin)) return toast("A KRA PIN looks like P051234567Z: a letter, 9 digits and a letter.");
+    const items = d.items.filter(i => String(i.desc || "").trim()).map(i => ({ desc: String(i.desc).trim(), qty: Number(i.qty) || 0, price: Number(i.price) || 0 }));
+    if (revise) {
+      const why = f.elements.why.value.trim(); if (!why) return toast("Say why you are revising it.");
+      const x = await db.rpc("doc_revise", { p_id: row.id, p_patch: { doc_date: d.doc_date, customer: d.customer, customer_pin: d.customer_pin, contact: d.contact, lpo_no: d.lpo_no, address: d.address, reference: d.reference, discount: d.discount, paid_before: d.paid_before || 0, items }, p_note: why });
+      if (x.error) return toast(x.error.message); $("#dlg").close(); toast("Saved as revision " + x.data.revision); return docsPage();
+    }
+    if (act === "issue" && !items.length) return toast("Add at least one item first.");
+    const payload = { doc_type: d.doc_type, doc_date: d.doc_date, customer: d.customer, customer_pin: d.customer_pin, contact: d.contact, lpo_no: d.lpo_no, address: d.address, reference: d.reference,
+      discount: d.discount || 0, paid_before: d.doc_type === "Quotation" ? 0 : d.paid_before || 0, items: act === "issue" ? items : d.items, account_id: d.doc_type === "Invoice" ? d.account_id || null : null };
+    if (!payload.doc_date) delete payload.doc_date;
+    const r = row ? await db.from("documents").update(payload).eq("id", row.id).select("id") : await db.from("documents").insert(payload).select("id");
+    if (r.error) return toast(r.error.message);
+    const id = row ? row.id : (Array.isArray(r.data) ? r.data[0]?.id : r.data?.id);
+    if (act === "issue" && id) { const x = await db.rpc("doc_issue", { p_id: id }); if (x.error) { $("#dlg").close(); toast("Saved as a draft, but not issued: " + x.error.message); return docsPage(); }
+      $("#dlg").close(); toast("Issued " + x.data.doc_no + (d.doc_type === "Invoice" ? ". Add its eTIMS number when you have it." : "")); return docsPage(); }
+    $("#dlg").close(); toast("Saved as a draft"); docsPage();
+  };
   draw(); $("#dlg").showModal();
+}
+function dnForm(row) {
+  const d = { ...row, items: (row.items || []).map(x => ({ ...x })) }, f = $("#dlgForm");
+  const left = it => Number(it.ordered || 0) - Number(it.prior || 0) - Number(it.delivered || 0);
+  f.innerHTML = `<h2>Delivery note ${esc(docNo(row))}</h2><p style="margin-top:0">${esc(row.reference || "")}${row.lpo_no ? " · LPO " + esc(row.lpo_no) : ""}. Enter what you are delivering now; Outstanding is worked out for you.</p>
+    <table><thead><tr><th>Item</th><th>Ordered</th><th>Delivered before</th><th>Delivering now</th><th>Outstanding</th></tr></thead><tbody>${d.items.map((it, i) => `<tr><td>${esc(it.desc)}</td><td class="n">${it.ordered}</td><td class="n">${it.prior}</td><td><input data-i="${i}" type="number" min="0" max="${Number(it.ordered) - Number(it.prior)}" step="any" value="${it.delivered}" style="width:90px"></td><td class="n" id="o${i}">${left(it)}</td></tr>`).join("")}</tbody></table>
+    <label class="full" style="margin-top:10px">Delivery address / site<input name="address" value="${esc(row.address || "")}"></label>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save draft</button>${can("docs.issue") ? `<button class="btn" style="background:#12b76a" value="issue">Save and issue</button>` : ""}<button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.oninput = e => { const i = e.target.dataset.i; if (i == null) return; d.items[i].delivered = Number(e.target.value) || 0; $("#o" + i).textContent = left(d.items[i]); };
+  f.onclick = null; f.onchange = null;
+  f.onsubmit = async e => { const act = e.submitter.value; if (!["save", "issue"].includes(act)) return; e.preventDefault();
+    const r = await db.from("documents").update({ items: d.items, address: f.elements.address.value.trim() || null }).eq("id", row.id).select("id"); if (r.error) return toast(r.error.message);
+    if (act === "issue") { const x = await db.rpc("doc_issue", { p_id: row.id }); if (x.error) { toast("Saved as a draft, but not issued: " + x.error.message); return; } toast("Issued " + x.data.doc_no); }
+    else toast("Saved as a draft");
+    $("#dlg").close(); docsPage(); };
+  $("#dlg").showModal();
+}
+function taxDialog() {
+  const f = $("#dlgForm");
+  f.innerHTML = `<h2>Tax settings</h2><div class="grid">
+    <label style="display:flex;gap:8px;align-items:center" class="full"><input type="checkbox" name="vat" ${COMPANY.vat_registered ? "checked" : ""} style="width:auto"> The company is registered for VAT (show a VAT line on documents)</label>
+    <label>VAT rate (%)<input name="rate" type="number" min="0" max="30" step="any" value="${COMPANY.vat_rate}"></label>
+    <label style="display:flex;gap:8px;align-items:center" class="full"><input type="checkbox" name="et" ${COMPANY.etims_registered ? "checked" : ""} style="width:auto"> Registered on KRA eTIMS (flag issued invoices that have no eTIMS number)</label></div>
+    <p style="color:var(--mut)">Franksomi Solution Ltd is not VAT-registered, so leave VAT off. When it is off no VAT line appears on screen, PDF or print. Documents already issued keep the setting they were issued with.</p>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements;
+    for (const [k, v] of [["vat_registered", String(el.vat.checked)], ["vat_rate", String(Number(el.rate.value) || 0)], ["etims_registered", String(el.et.checked)]]) { const r = await db.rpc("company_setting_set", { p_key: k, p_value: v }); if (r.error) return toast(r.error.message); }
+    $("#dlg").close(); toast("Saved"); docsPage(); };
+  $("#dlg").showModal();
+}
+
+// ---- owner-only import of the history workbook --------------------------------------------------------------------
+function historyPayload(sheets) {
+  const tbl = (name, key) => {
+    const rows = sheets[name] || [], hi = rows.findIndex(r => r.includes(key)); if (hi < 0) throw new Error(`The sheet “${name}” is missing or has a different layout (no “${key}” column).`);
+    const h = rows[hi]; return rows.slice(hi + 1).filter(r => r.some(x => x != null && x !== "")).map(r => Object.fromEntries(h.map((k, i) => [k, r[i] ?? null])));
+  };
+  const docs = tbl("Documents", "History ID"), lines = tbl("Line Items", "History ID"), clients = tbl("Clients", "Client"), prices = tbl("Price List", "Item key");
+  const by = {}; lines.forEach(l => (by[l["History ID"]] ||= []).push({ desc: String(l["Description"] || "").trim(), qty: Number(l["Qty"]) || 1, price: Number(l["Unit price (KES)"]) || 0 }));
+  const str = v => v == null || v === "" ? null : String(v).trim();
+  const out = {
+    docs: docs.filter(r => str(r["History ID"])).map(r => ({ history_id: str(r["History ID"]), original_no: str(r["Original No."]) === "0" ? null : str(r["Original No."]), kind: str(r["Kind"]), date: str(r["Date"]), client: str(r["Client"]) || "Unknown",
+      project: str(r["Project / work"]), business_line: str(r["Main business line"]), total: r["Total (KES)"] == null || r["Total (KES)"] === "" ? null : Number(r["Total (KES)"]), status: str(r["Status"]), flags: str(r["Flags to check"]), files: str(r["Source file(s)"]), lines: by[str(r["History ID"])] || [] })),
+    clients: clients.filter(r => str(r["Client"])).map(r => ({ name: str(r["Client"]), sector: str(r["Sector"]), contact: str(r["Known contact"]), phone: str(r["Phone"]), email: str(r["Email"]), pin: str(r["KRA PIN"]) })),
+    prices: prices.filter(r => str(r["Item key"])).map(r => ({ item_key: str(r["Item key"]), item: str(r["Item (latest wording)"]), business_line: str(r["Business line"]), times: Number(r["Times quoted/billed"]) || null, low: r["Lowest price (KES)"], high: r["Highest price (KES)"], last_price: r["Last price charged (KES)"], last_used: str(r["Last used"]) })),
+  };
+  const nos = {}; out.docs.forEach(d => { if (d.original_no) nos[d.original_no] = (nos[d.original_no] || 0) + 1; });
+  out.stats = { docs: out.docs.length, lines: lines.length, clients: out.clients.length, prices: out.prices.length, void: out.docs.filter(d => ["Possible duplicate", "Superseded"].includes(d.status)).length,
+    undated: out.docs.filter(d => !d.date).length, unnumbered: out.docs.filter(d => !d.original_no).length, repeated: Object.values(nos).filter(n => n > 1).length,
+    byKind: out.docs.reduce((a, d) => (a[d.kind] = (a[d.kind] || 0) + 1, a), {}), noLines: out.docs.filter(d => !d.lines.length).length };
+  return out;
+}
+function importDialog() {
+  const f = $("#dlgForm"); let payload = null;
+  f.innerHTML = `<h2>Import history</h2><p style="margin-top:0">Choose the <b>Franksomi_History_Import.xlsx</b> workbook (sheets Documents, Line Items, Clients, Price List). Past quotations, invoices and delivery notes come in as <b>read-only “Imported”</b> records with their original numbers and dates. Duplicates and superseded drafts come in as <b>Void</b>. Nothing is added to customer balances or income, and nothing is sent to anyone. You can run it again safely: records already imported are skipped.</p>
+    <input type="file" id="xf" accept=".xlsx"><div id="xp" style="margin:10px 0"></div>
+    <div class="bar"><button class="btn" value="go" id="xgo" disabled>Import now</button><button class="btn ghost" value="cancel" formnovalidate>Close</button></div>`;
+  f.onchange = async e => { if (e.target.id !== "xf" || !e.target.files[0]) return; const p = $("#xp"); p.textContent = "Reading the workbook…"; $("#xgo").disabled = true;
+    try { payload = historyPayload(await XLSXMini.read(await e.target.files[0].arrayBuffer())); const s = payload.stats;
+      p.innerHTML = `<div class="box"><b>${s.docs}</b> documents (${Object.entries(s.byKind).map(([k, n]) => n + " " + esc(k.toLowerCase())).join(", ")}) with <b>${s.lines}</b> line items<br><b>${s.void}</b> will be Void (possible duplicate / superseded) · <b>${s.undated}</b> undated · <b>${s.unnumbered}</b> unnumbered (they get their History ID) · <b>${s.noLines}</b> with no line items (the stated total is kept)<br>${s.repeated} original number(s) are used more than once in your old files. They are kept as they are.<br><b>${s.clients}</b> clients (institutions become credit accounts; individuals stay as names on their documents) · <b>${s.prices}</b> items in the price list</div>`;
+      $("#xgo").disabled = false; } catch (err) { payload = null; p.innerHTML = `<div class="box" style="border-color:#b42318"><b>Could not read it:</b> ${esc(err.message)}</div>`; } };
+  f.onsubmit = async e => { if (e.submitter.value !== "go" || !payload) return; e.preventDefault(); const p = $("#xp"), say = t => p.innerHTML = `<div class="box">${esc(t)}</div>`; $("#xgo").disabled = true;
+    try {
+      const c = await db.rpc("history_import_clients", { p: payload.clients }); if (c.error) throw c.error; say(`Clients done (${c.data.accounts_created} new credit accounts). Importing documents…`);
+      let added = 0, skipped = 0, voided = 0;
+      for (let i = 0; i < payload.docs.length; i += 25) { const r = await db.rpc("history_import", { p: payload.docs.slice(i, i + 25) }); if (r.error) throw r.error; added += r.data.added; skipped += r.data.already_there; voided += r.data.void; say(`Documents ${Math.min(i + 25, payload.docs.length)} of ${payload.docs.length}…`); }
+      for (let i = 0; i < payload.prices.length; i += 100) { const r = await db.rpc("history_import_prices", { p: payload.prices.slice(i, i + 100) }); if (r.error) throw r.error; }
+      p.innerHTML = `<div class="box" style="border-color:#067647"><b>Done.</b> ${added} documents imported (${voided} void), ${skipped} already there, ${c.data.accounts_created} credit accounts created, ${payload.prices.length} price-list items stored.</div>`;
+      toast("History imported"); refreshLookups(); setTimeout(docsPage, 1200);
+    } catch (err) { p.innerHTML = `<div class="box" style="border-color:#b42318"><b>Stopped:</b> ${esc(err.message || String(err))}. Records already imported stay; run the import again to continue.</div>`; $("#xgo").disabled = false; } };
+  $("#dlg").showModal();
+}
+function docPrintHtml(r) {
+  const t = docTotals(r), ty = r.doc_type, dn = ty === "Delivery note", cn = ty === "Credit note", st = docSt(r), no = docNo(r) + ((r.revision || 1) > 1 ? " (revision " + r.revision + ")" : "");
+  const banner = r._old ? `<p class="box"><b>EARLIER VERSION</b> – replaced by a later revision</p>` : isImp(r) ? `<p class="box"><b>Imported record</b> of the original document ${esc(r.doc_no)}${st === "Void" ? ". Marked void: " + esc(r.void_reason || "") : ""}</p>` : st === "Draft" && "status" in r ? `<p class="box"><b>DRAFT</b> – not issued</p>` : st === "Void" ? `<p class="box"><b>VOID</b>${r.void_reason ? " – " + esc(r.void_reason) : ""}</p>` : "";
+  const info = [["Customer", r.customer], ["Customer KRA PIN", r.customer_pin], ["Contact", r.contact], ["Address / site", r.address], ["Reference", r.reference], ["Client LPO / PO no.", r.lpo_no], ["Date", r.doc_date || "undated"],
+    ...(["Invoice", "Credit note"].includes(ty) ? [["eTIMS invoice no.", r.etims_no], ["eTIMS date", r.etims_date]] : [])].filter(([, v]) => v);
+  const rows = dn ? r.items.map(i => `<tr><td>${esc(i.desc)}</td><td>${i.ordered}</td><td>${i.prior}</td><td>${i.delivered}</td><td>${Number(i.ordered) - Number(i.prior) - Number(i.delivered)}</td></tr>`).join("")
+    : r.items.map(i => `<tr><td>${esc(i.desc)}</td><td>${i.qty}</td><td>${kes(i.price)}</td><td>${kes(i.qty * i.price)}</td></tr>`).join("");
+  const head_ = dn ? `<th>Description</th><th>Ordered</th><th>Delivered before</th><th>Delivered now</th><th>Outstanding</th>` : `<th>Description</th><th>Qty</th><th>Unit price</th><th>Amount (KES)</th>`;
+  const sum_ = dn ? "" : t.stated ? `${r.items.length ? `<tr><td colspan="3" align="right">Total of the line items found</td><td>${kes(t.lines)}</td></tr>` : ""}<tr><th colspan="3" align="right">TOTAL AS SHOWN ON THE ORIGINAL (KES)</th><th>${kes(t.total)}</th></tr>`
+    : `<tr><td colspan="3" align="right">Subtotal</td><td>${kes(t.sub)}</td></tr>${Number(r.discount) > 0 ? `<tr><td colspan="3" align="right">Discount</td><td>${kes(r.discount)}</td></tr>` : ""}${Number(r.vat_rate) > 0 ? `<tr><td colspan="3" align="right">VAT (${r.vat_rate}%)</td><td>${kes(t.vat)}</td></tr>` : ""}
+      <tr><th colspan="3" align="right">${cn ? "TOTAL CREDITED (KES)" : "TOTAL (KES)"}</th><th>${kes(t.total)}</th></tr>${["Invoice", "Receipt"].includes(ty) ? `<tr><td colspan="3" align="right">Paid to date</td><td>${kes(r.paid_before)}</td></tr><tr><th colspan="3" align="right">BALANCE (KES)</th><th>${kes(t.balance)}</th></tr>` : ""}`;
+  const foot = dn ? `<p>Goods received in good order and condition.</p><p>Delivered by: ______________________ &nbsp; Received by (name, signature, date): ______________________</p>`
+    : `<p>${ty === "Quotation" ? "Prices in KES. Goods remain the property of Franksomi Solution Ltd until paid in full." : cn ? "This credit note cancels the invoice named above." : "Thank you for your business."}</p>`;
+  return head(ty.toUpperCase(), no) + banner + kv(info) + `<table style="margin-top:10px"><thead><tr>${head_}</tr></thead><tbody>${rows}${sum_}</tbody></table>` + foot;
 }
 
 // ---- printable cards ----------------------------------------------------------
@@ -745,12 +963,7 @@ function printCard(kind, r) {
      <p style="text-align:center;color:#555">✂ - - - - - - - - - - - - - tear off here - - - - - - - - - - - - -</p>
      <div class="box"><img src="logo.png" alt="" height="22" style="vertical-align:middle;margin-right:6px"><b>CLIENT RECEIPT — ${SHOP.name}</b> &nbsp; Job No: <b>${esc(r.job_no)}</b><br>Client: ${esc(r.client_name)} &nbsp; Job type: ${esc(r.job_type)}<br>Site: ${esc(r.site)} &nbsp; Contract price: KES ${kes(r.contract_price)}<br>
      Deposit received (KES): ____________ &nbsp; Received by: ____________<br><small>Keep this slip. It confirms your booking and any deposit paid.</small></div>`;
-  if (kind === "document") { const t = docTotals(r), no = docNo(r);
-    h = head(r.doc_type.toUpperCase(), no) + kv([["Customer", r.customer], ["Contact", r.contact], ["Address / site", r.address], ["Reference", r.reference], ["Date", r.doc_date]]) +
-      `<table style="margin-top:10px"><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Amount (KES)</th></tr></thead><tbody>${r.items.map(i => `<tr><td>${esc(i.desc)}</td><td>${i.qty}</td><td>${kes(i.price)}</td><td>${kes(i.qty * i.price)}</td></tr>`).join("")}
-      <tr><td colspan="3" align="right">Subtotal</td><td>${kes(t.sub)}</td></tr><tr><td colspan="3" align="right">Discount</td><td>${kes(r.discount)}</td></tr><tr><td colspan="3" align="right">VAT (${r.vat_rate}%)</td><td>${kes(t.vat)}</td></tr>
-      <tr><th colspan="3" align="right">TOTAL (KES)</th><th>${kes(t.total)}</th></tr>${r.doc_type !== "Quotation" ? `<tr><td colspan="3" align="right">Paid to date</td><td>${kes(r.paid_before)}</td></tr><tr><th colspan="3" align="right">BALANCE (KES)</th><th>${kes(t.balance)}</th></tr>` : ""}</tbody></table>
-      <p>${r.doc_type === "Quotation" ? "Prices in KES. Goods remain the property of Franksomi Solution Ltd until paid in full." : "Thank you for your business."}</p>`; }
+  if (kind === "document") { printHtml(docPrintHtml(r), docNo(r) + " " + r.doc_type + ".pdf"); return; }
   const fname = kind === "jobcard" ? "JC-" + String(r.id).padStart(4, "0") + " Job Card.pdf" : kind === "fieldcard" ? r.job_no + " Field Job Card.pdf" : docNo(r) + " " + r.doc_type + ".pdf";
   printHtml(h, fname);
 }
@@ -1159,7 +1372,8 @@ async function refreshLookups() {
   lists = { item_type: li.filter(x => x.kind === "item_type"), brand: li.filter(x => x.kind === "brand"), stock_type: li.filter(x => x.kind === "stock_type") };
   stockItems = must(await db.from("v_stock").select("id,code,description,on_hand,selling_price").order("code")) || [];
   suppliers = must(await db.from("suppliers").select("id,name").order("name")) || [];
-  accounts = can("accounts.view") ? (must(await db.from("credit_accounts").select("id,name,active,credit_limit").order("name")) || []) : [];
+  accounts = [];
+  if (can("accounts.view")) { let ar = await db.from("credit_accounts").select("id,name,active,credit_limit,kra_pin").order("name"); if (ar.error) ar = await db.from("credit_accounts").select("id,name,active,credit_limit").order("name"); accounts = must(ar) || []; }
   catalog = (must(await db.from("service_catalog").select("*").order("name")) || []).filter(c => c.active !== false);
 }
 async function route() {

@@ -38,6 +38,18 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
   <p class="center" style="margin-top:26px"><a class="btn blue" href="services.html">See every service</a></p>
 </div></section>
 
+<section class="sec alt" id="institutions"><div class="wrap">
+  <div class="center"><span class="kicker">For schools, churches, child development centres and hospitals</span><h2>Technical support your institution can plan around</h2><p class="lead">One local team for ICT, CCTV, electrical and networking, with proper paperwork: eTIMS invoices, your LPO accepted, and a monthly account if you prefer to pay at month end.</p></div>
+  <div class="grid g4" style="margin-top:34px">
+    <div class="card svc"><span class="ic" id="inIc1"></span><h3>ICT support contracts</h3><p>A monthly or yearly plan: scheduled visits, call-outs when something breaks, backups, updates and help for your staff.</p></div>
+    <div class="card svc"><span class="ic" id="inIc2"></span><h3>CCTV</h3><p>Site survey, supply, installation and mobile viewing for classrooms, compounds, wards and offices, with after-sales support.</p></div>
+    <div class="card svc"><span class="ic" id="inIc3"></span><h3>Electrical</h3><p>Wiring, lighting, distribution boards and earthing for new buildings and repairs, quoted in writing before work starts.</p></div>
+    <div class="card svc"><span class="ic" id="inIc4"></span><h3>Networking</h3><p>Structured cabling, Wi-Fi coverage, routers, switches and internet links for campuses, church halls and clinics.</p></div>
+  </div>
+  <ul class="ticks" style="display:flex;gap:14px 28px;flex-wrap:wrap;justify-content:center;margin:30px 0 8px;padding:0;list-style:none"><li>eTIMS invoices</li><li>LPOs accepted</li><li>Monthly accounts</li><li>Written quotation first</li></ul>
+  <p class="center" style="margin-top:22px"><a class="btn" href="#contact" id="instAsk">Request a contract enquiry</a></p>
+</div></section>
+
 <section class="sec alt"><div class="wrap">
   <div class="center"><span class="kicker">Our promise</span><h2>You always know what is happening</h2><p class="lead">Every repair, installation job and shop order gets a number. Use it with your phone number to see exactly where things stand.</p></div>
   <div class="grid g3 steps3" style="margin-top:44px">
@@ -88,7 +100,7 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
     <a class="btn green" href="https://wa.me/254711952924?text=Hello%20Franksomi%2C%20" target="_blank" rel="noopener">Chat on WhatsApp</a></div>
   <form class="card" id="enqForm" novalidate><h3>Send us a message</h3>
     <label>Your name<input name="name" required autocomplete="name"></label><label>Phone number<input name="phone" type="tel" required autocomplete="tel" placeholder="07xx xxx xxx"></label>
-    <label>What do you need?<select name="topic"><option>Phone repair</option><option>Laptop or printer repair</option><option>CCTV quote</option><option>Electrical quote</option><option>Landlord WiFi</option><option>Networking or ICT support</option><option>Networking equipment</option><option>Monthly account for my business</option><option>Phones and accessories</option><option>Printing and cyber</option><option>Something else</option></select></label>
+    <label>What do you need?<select name="topic"><option>Phone repair</option><option>Laptop or printer repair</option><option>CCTV quote</option><option>Electrical quote</option><option>Landlord WiFi</option><option>Networking or ICT support</option><option>Networking equipment</option><option>Monthly account for my business</option><option>Contract enquiry (institution)</option><option>Phones and accessories</option><option>Printing and cyber</option><option>Something else</option></select></label>
     <label>Message (optional)<textarea name="message" maxlength="600"></textarea></label><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
     <button class="btn" type="submit">Send</button><p class="msg" id="enqMsg" role="status"></p></form>
 </div></section>
@@ -118,6 +130,8 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
   WEB.products().then(function(r){
     if(r.offline||r.error||!r.list.length){box.innerHTML='<div class="empty" style="grid-column:1/-1"><img src="media/emblem.png" alt="">'+(r.offline?"The online shop is being set up.":r.error?"We could not load the shop just now.":"New stock is being added.")+' Ask us on <a href="'+WEB.waLink("Hello Franksomi, what accessories do you have?")+'">WhatsApp</a>.</div>';return}
     var l=r.list.slice(0,8);box.innerHTML=l.map(WEB.card).join("");WEB.wireProducts(box,function(id){return r.list.find(function(p){return String(p.id)===String(id)})});});
+  document.getElementById("inIc1").innerHTML=WEB.svgIcon("network");document.getElementById("inIc2").innerHTML=WEB.svgIcon("cctv");document.getElementById("inIc3").innerHTML=WEB.svgIcon("bolt");document.getElementById("inIc4").innerHTML=WEB.svgIcon("router");
+  document.getElementById("instAsk").onclick=function(){document.getElementById("enqForm").topic.value="Contract enquiry (institution)"};
   document.getElementById("bizAsk").onclick=function(){document.getElementById("enqForm").topic.value="Monthly account for my business"};
   document.getElementById("enqForm").onsubmit=async function(e){e.preventDefault();var f=e.target,m=document.getElementById("enqMsg");m.className="msg";
     if(!WEB.db){m.className="msg bad";m.textContent="The form is not switched on yet. Please call or WhatsApp us on 0711 952 924.";return}
