@@ -48,7 +48,7 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
     <div class="card svc"><span class="ic" id="inIc4"></span><h3>Networking</h3><p>Structured cabling, Wi-Fi coverage, routers, switches and internet links for campuses, church halls and clinics.</p></div>
   </div>
   <ul class="ticks" style="display:flex;gap:14px 28px;flex-wrap:wrap;justify-content:center;margin:30px 0 8px;padding:0;list-style:none"><li>eTIMS invoices</li><li>LPOs accepted</li><li>Monthly accounts</li><li>Written quotation first</li></ul>
-  <p class="center" style="margin-top:22px"><a class="btn" href="#contact" id="instAsk">Request a contract enquiry</a></p>
+  <p class="center" style="margin-top:22px"><a class="btn" href="#contact" id="instAsk">Request a contract enquiry</a> <a class="btn line" href="account.html" style="color:var(--txt)">Already have an account? Sign in</a></p>
 </div></section>
 
 <section class="sec alt"><div class="wrap">
@@ -93,6 +93,12 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
   <div class="center"><span class="kicker">See us at work</span><h2>Watch and see</h2></div>
   <div class="split" style="margin-top:30px"><div class="phone"><video src="media/promo.mp4" poster="media/promo-poster.jpg" controls playsinline preload="none" aria-label="Franksomi promo video with voiceover"></video><div class="tag">54 seconds · sound on</div></div>
     <div><div class="gallery" style="grid-template-columns:1fr 1fr"><img src="media/promo-repair.jpg" alt="Fixed right. Tracked live. Screens, charging ports, batteries, software and flashing." loading="lazy"><img src="media/promo-cctv.jpg" alt="CCTV: see your property from your phone." loading="lazy"><img src="media/promo-laptops.jpg" alt="We repair laptops and printers too." loading="lazy"><img src="media/promo-services.jpg" alt="One shop for all your tech." loading="lazy"></div></div></div>
+</div></section>
+
+<section class="sec" id="recent" hidden><div class="wrap">
+  <div class="center"><span class="kicker">Our work</span><h2>Recent projects</h2></div>
+  <div class="grid g3" id="recentList" style="margin-top:30px"></div>
+  <p class="center" style="margin-top:22px"><a class="btn line" href="projects.html" style="color:var(--txt)">See all projects</a></p>
 </div></section>
 
 <section class="sec alt" id="contact"><div class="wrap split" style="align-items:start">
@@ -142,4 +148,8 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
     m.className="msg ok";m.textContent="Thank you! We will call or message you soon.";f.reset()};
 })();
 </script>
+<script>(function(){var W=window.WEB;if(!W||!W.db)return;var esc=W.esc;
+  W.db.rpc("site_projects",{p_limit:3}).then(function(r){var rows=(r&&r.data)||[];if(!rows.length)return;
+    document.getElementById("recentList").innerHTML=rows.map(function(p){var ph=p.photos||[];return '<article class="card">'+(ph[0]?'<img src="'+esc(ph[0])+'" alt="'+esc(p.title)+'" loading="lazy" style="width:100%;height:180px;object-fit:cover;border-radius:10px;margin-bottom:12px">':'')+'<h3 style="margin:0 0 6px">'+esc(p.title)+'</h3><p style="margin:0;color:var(--mut)">'+esc(p.summary||[p.type,p.client].filter(Boolean).join(" · "))+'</p></article>'}).join("");
+    document.getElementById("recent").hidden=false}).catch(function(){})})();</script>
 <script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>

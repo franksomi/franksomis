@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Our policies | Franksomi Solution Ltd</title><meta name="description" content="Customer service, warranty and returns, and anti-bribery policies of Franksomi Solution Ltd."><meta name="theme-color" content="#0E152B">
+<link rel="icon" href="media/emblem.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap"><link rel="stylesheet" href="web.css">
+<link rel="manifest" href="site.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
+
+<section class="shophead"><div class="wrap"><span class="kicker">Good business</span><h1 style="font-size:clamp(1.8rem,5vw,2.8rem)">Our policies</h1><p>How we look after our customers and how we do business.</p></div></section>
+<main id="main" class="wrap" style="padding:40px 18px 70px">
+<div id="list" class="grid g3"></div><p id="none" class="center" style="color:var(--mut)" hidden>Our policies will be published here soon.</p>
+</main>
+<div id="siteFooter"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script>
+<script>(function(){WEB.chrome("policies.html");
+var esc=WEB.esc;
+(async function(){if(!WEB.db){document.getElementById("none").hidden=false;return}
+  var r=await WEB.db.rpc("site_policy_list",{});var rows=(r.data||[]);if(!rows.length){document.getElementById("none").hidden=false;return}
+  document.getElementById("list").innerHTML=rows.map(function(p){return '<a class="card" href="policy.html?p='+encodeURIComponent(p.slug)+'" style="text-decoration:none;color:inherit"><h3 style="margin:0 0 8px">'+esc(p.title)+'</h3><span style="color:var(--blue,#1d4ed8);font-weight:600">Read the policy</span></a>'}).join("")})();
+})();</script>
+<script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>

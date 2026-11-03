@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Policy | Franksomi Solution Ltd</title><meta name="description" content="Policy of Franksomi Solution Ltd."><meta name="theme-color" content="#0E152B">
+<link rel="icon" href="media/emblem.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap"><link rel="stylesheet" href="web.css">
+<link rel="manifest" href="site.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
+
+<section class="shophead"><div class="wrap"><span class="kicker">Our policies</span><h1 style="font-size:clamp(1.8rem,5vw,2.8rem)">Policy</h1><p>Franksomi Solution Ltd</p></div></section>
+<main id="main" class="wrap" style="padding:40px 18px 70px">
+<article id="body" style="max-width:760px"></article><p><a href="policies.html">All policies</a></p>
+</main>
+<div id="siteFooter"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script>
+<script>(function(){WEB.chrome("policies.html");
+var esc=WEB.esc,q=new URLSearchParams(location.search).get("p")||"";
+function fmt(t){return String(t||"").split(/\n\s*\n/).map(function(b){b=b.trim();if(!b)return"";if(/^## /.test(b))return '<h2>'+esc(b.slice(3))+'</h2>';return '<p>'+esc(b).replace(/\n/g,"<br>")+'</p>'}).join("")}
+(async function(){var B=document.getElementById("body");if(!WEB.db){B.innerHTML="<p>This page is not available yet.</p>";return}
+  var r=await WEB.db.rpc("site_policy",{p_slug:q});var p=r.data||{};if(p.error||!p.title){B.innerHTML="<p>We could not find that policy. See <a href='policies.html'>all policies</a>.</p>";return}
+  document.title=p.title+" | Franksomi Solution Ltd";document.querySelector(".shophead h1").textContent=p.title;
+  B.innerHTML=fmt(p.body)+'<p style="color:var(--mut);font-size:.85rem">Last updated '+esc(String(p.updated_at||"").slice(0,10))+'</p>'})();
+})();</script>
+<script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>

@@ -29,7 +29,11 @@
     payables: "M12 3v18 M16.5 7.5c-.8-1.2-2.4-2-4.5-2-2.6 0-4.2 1.2-4.2 3s1.6 2.6 4.2 3.2 4.2 1.4 4.2 3.2-1.6 3-4.2 3c-2.2 0-3.9-.9-4.8-2.2",
     accounts: "M3 5h18v14H3z M3 10h18 M7 15h4",
     chat: "M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z M9 12h.01 M13 12h.01 M17 12h.01",
-    deposit: "M3 8h18v12H3z M3 8l3-4h12l3 4 M12 12v4 M10 14h4"
+    deposit: "M3 8h18v12H3z M3 8l3-4h12l3 4 M12 12v4 M10 14h4",
+    equipment: "M4 5h16v10H4z M8 19h8 M12 15v4",
+    vault: "M5 3h10l4 4v14H5z M14 3v5h5 M9 13h6 M9 17h6",
+    projects: "M3 7h18v13H3z M8 7V4h8v3 M3 13h18",
+    policies: "M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4"
   };
   const icon = (n, size = 20) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${(P[n] || P.dashboard).split(" M").map((d, i) => `<path d="${i ? "M" : ""}${d}"/>`).join("")}</svg>`;
 

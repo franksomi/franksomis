@@ -79,9 +79,9 @@ const T = {
     fields: [["name", "Supplier name", "text", { req: 1 }], ["contact_person", "Contact person", "text"], ["phone", "Phone", "text"], ["location", "Location", "text"], ["supplies", "What they supply", "text", { full: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
 };
 const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
-  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["quotes", "Open quotes", "docs.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
+  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["quotes", "Open quotes", "docs.view"], ["equipment", "Client equipment", "equipment.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
   ["mpay", "M-Pesa checkout", "mpay.use"], ["sms", "SMS messages", "sms.manage"], ["eod", "End of day", "eod.view"], ["monthly", "Monthly report", "reports.view+costs.view"], ["summary", "Year summary", "reports.view+costs.view"],
-  ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["payables", "Supplier payables", "payables.view"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["users", "Users & roles", "users.manage"]];
+  ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["payables", "Supplier payables", "payables.view"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["vault", "Company documents", "vault.manage"], ["projects", "Website projects", "projects.manage"], ["policies", "Website policies", "settings.manage"], ["users", "Users & roles", "users.manage"]];
 const navFor = () => NAV.filter(n => !n[2] || can(n[2]));
 
 // ---- form widgets -----------------------------------------------------------
@@ -265,7 +265,7 @@ async function tablePage(key) {
     const v = r[k]; if (t === "tag") return `<td><span class="tag ${v === "REORDER" || v === "In shop" ? "bad" : "ok"}">${esc(v)}</span></td>`;
     return `<td class="${t === "n" ? "n" : ""}">${t === "n" ? kes(v) : t === "dt" ? esc(String(v || "").replace("T", " ").slice(0, 16)) : t === "yn" ? (v ? "Yes" : "") : t === "acct" ? esc(acctName(v)) : esc(v)}</td>`; }).join("")}
     <td>${pm(def, "edit") ? `<button class="btn sm" data-edit="${i}">Edit</button>` : ""} ${def.print ? `<button class="btn sm pbtn" data-print="${i}">Print card</button>` : ""}
-    ${def.margin && can("costs.view") ? `<button class="btn sm ghost" data-mg="${i}">Margin</button>` : ""}${def.mpay && can("mpay.use") ? `<button class="btn sm" style="background:#12b76a" data-pay="${i}">M-Pesa</button>` : ""}${def.mpay === "repair" ? ` <button class="btn sm wabtn" data-wa="${i}">Send tracking link</button>` : ""}
+    ${def.margin && can("costs.view") ? `<button class="btn sm ghost" data-mg="${i}">Margin</button>` : ""}${key === "jobs" && r.status === "Completed" && can("projects.manage") ? `<button class="btn sm ghost" data-wp="${i}">Show on website</button>` : ""}${def.mpay && can("mpay.use") ? `<button class="btn sm" style="background:#12b76a" data-pay="${i}">M-Pesa</button>` : ""}${def.mpay === "repair" ? ` <button class="btn sm wabtn" data-wa="${i}">Send tracking link</button>` : ""}
     ${pm(def, "delete") ? `<button class="btn sm warn" data-del="${i}">Delete</button>` : ""}</td></tr>`).join("");
   if (def.quick) await refreshLookups();
   const quickBar = def.quick ? `<div class="bar" id="quick">${catalog.filter(c => c.active).map(c => `<button class="btn sm ghost" data-svc="${esc(c.name)}" title="KES ${c.default_price} per ${esc(c.unit)}">${esc(c.name.split(" (")[0])}</button>`).join("")}</div>` : "";
@@ -280,6 +280,7 @@ async function tablePage(key) {
     if (b.dataset.del && confirm("Delete this record? This cannot be undone.")) { const r = await db.from(def.table).delete().eq("id", rows[b.dataset.del].id); if (r.error) toast(r.error.message); else route(); }
     if (b.dataset.print) { let r = rows[b.dataset.print]; if (def.print === "jobcard") r = { ...r, ...(await repairChecks(r.id)), items: await repairItems(r.id) }; printCard(def.print, r); }
     if (b.dataset.mg) marginDialog("field_job", rows[b.dataset.mg]);
+    if (b.dataset.wp) projectDialog(rows[b.dataset.wp], null);
     if (b.dataset.pay) { const r = rows[b.dataset.pay]; mpayDialog(def.mpay === "repair"
       ? { phone: r.contact, amount: Math.max(0, Math.floor(r.balance_due || 0)) || "", ref: "JC-" + String(r.id).padStart(4, "0"), purpose: "Repair payment", auto: true, name: r.customer_name }
       : { phone: r.contact, amount: Math.max(0, Math.floor(r.balance || 0)) || "", ref: r.job_no, purpose: "Job payment " + r.job_no, auto: true, name: r.client_name }); }
@@ -412,6 +413,8 @@ async function dashboard() {
   add(d.enquiries_new, "new website enquiry(ies)", "enquiries", "enquiries");
   add(d.chat_waiting, "live chat(s) waiting", "chat", "chat");
   if (ex.quotes) add(ex.quotes.due, "quotation(s) to follow up", "quotes", "docs");
+  add(ex.warranty_soon, "equipment warranty(ies) ending within 30 days", "equipment", "equipment");
+  if (ex.vault) { add(ex.vault.expired, "company document(s) expired", "vault", "vault"); add(ex.vault.expiring, "company document(s) expiring within 30 days", "vault", "vault"); }
   add(ex.etims_missing, "issued invoice(s) / credit note(s) missing an eTIMS number", "docs", "docs");
   if (ex.payables) add(Number(ex.payables.overdue) > 0 ? 1 : 0, "supplier bill(s) overdue: KES " + kes(ex.payables.overdue), "payables", "payables");
   if (ex.payables && Number(ex.payables.due7) > Number(ex.payables.overdue)) add(1, "KES " + kes(Number(ex.payables.due7) - Number(ex.payables.overdue)) + " supplier bills due this week", "payables", "payables");
@@ -949,6 +952,135 @@ function quoteDialog(r, after) {
     if (x.error) return toast(x.error.message); $("#dlg").close(); toast("Saved"); after(); };
   $("#dlg").showModal();
 }
+// ---- v21: client equipment, documents vault, website projects and policies ------------------------
+const daysTo = d => d ? Math.round((new Date(d + "T12:00:00") - new Date(iso(new Date()) + "T12:00:00")) / 864e5) : null;
+const dueTag = (d, soon = 30, word = "Ends") => { const n = daysTo(d); if (n == null) return ""; return n < 0 ? `<span class="tag bad">Expired ${esc(d)}</span>` : n <= soon ? `<span class="tag bad">${word} in ${n} d</span> <small>${esc(d)}</small>` : esc(d); };
+async function equipmentPage() {
+  const can_ = can("equipment.edit");
+  const [er, jr] = await Promise.all([db.from("equipment").select("*").order("id", { ascending: false }).limit(2000), can("jobs.view") ? db.from("field_jobs").select("id,job_no,client_name") : { data: [] }]);
+  const rows = must(er) || [], jobs = (jr && jr.data) || [], jobNo = id => (jobs.find(j => j.id === id) || {}).job_no || "J-" + String(id).padStart(3, "0");
+  const flt = { q: "", soon: false };
+  const link = r => [r.repair_id ? "JC-" + String(r.repair_id).padStart(4, "0") : "", r.job_id ? jobNo(r.job_id) : ""].filter(Boolean).join(" · ");
+  const draw = () => { const q = flt.q.toLowerCase(), v = rows.filter(r => (!flt.soon || (daysTo(r.warranty_end) != null && daysTo(r.warranty_end) <= 30)) && (!q || [r.customer_name, r.device_type, r.make_model, r.serial_no, r.mac_imei, r.location, link(r)].join(" ").toLowerCase().includes(q)));
+    $("#etb").innerHTML = v.slice(0, 400).map((r, i) => `<tr><td><b>${esc(r.customer_name)}</b></td><td>${esc(r.device_type)}<br><small>${esc(r.make_model || "")}</small></td><td>${esc(r.serial_no || "")}${r.mac_imei ? `<br><small>${esc(r.mac_imei)}</small>` : ""}</td><td>${esc(r.location || "")}</td><td>${esc(r.installed_on || "")}</td><td>${dueTag(r.warranty_end)}</td><td>${esc(link(r))}</td>
+      <td class="acts">${can_ ? `<button class="btn sm" data-e="${rows.indexOf(r)}">Edit</button> <button class="btn sm warn" data-d="${rows.indexOf(r)}">Delete</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="8">Nothing matches.</td></tr>`; $("#ecnt").textContent = v.length + " item(s)"; };
+  $("#view").innerHTML = `<h2>Client equipment</h2><p style="color:var(--mut);margin-top:0">What you have installed or repaired for each customer: serial numbers, MAC / IMEI, where it is on site, install date and warranty.</p>
+    <div class="bar">${can_ ? `<button class="btn" id="enew">+ New equipment</button>` : ""}<input id="eq" placeholder="Search customer, device, serial, MAC…" style="max-width:300px"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="esoon" style="width:auto"> Warranty ending within 30 days</label><span id="ecnt" style="color:var(--mut)"></span></div>
+    <div class="wrap"><table><thead><tr><th>Customer</th><th>Device</th><th>Serial / MAC / IMEI</th><th>Location on site</th><th>Installed</th><th>Warranty</th><th>Linked to</th><th></th></tr></thead><tbody id="etb"></tbody></table></div>`;
+  draw(); $("#eq").oninput = e => { flt.q = e.target.value; draw(); }; $("#esoon").onchange = e => { flt.soon = e.target.checked; draw(); };
+  if ($("#enew")) $("#enew").onclick = () => equipmentForm(null, jobs);
+  $("#etb").onclick = async e => { const b = e.target.closest("button"); if (!b) return; const r = rows[b.dataset.e ?? b.dataset.d];
+    if (b.dataset.e != null) equipmentForm(r, jobs);
+    else if (confirm("Delete this equipment record?")) { const x = await db.from("equipment").delete().eq("id", r.id); if (x.error) toast(x.error.message); else equipmentPage(); } };
+}
+function equipmentForm(r, jobs) {
+  const f = $("#dlgForm"), a = accounts.filter(x => x.active || (r && x.id === r.account_id)), ref = r ? [r.repair_id ? "JC-" + String(r.repair_id).padStart(4, "0") : "", ""] : ["", ""], jref = r && r.job_id ? ((jobs.find(j => j.id === r.job_id) || {}).job_no || "") : "";
+  f.innerHTML = `<h2>${r ? "Edit" : "New"} equipment</h2><div class="grid">
+    ${a.length ? `<label class="full">Credit account (optional)<select name="account_id"><option value="">— not on an account —</option>${a.map(x => `<option value="${x.id}" ${r && x.id === r.account_id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>` : ""}
+    <label class="full">Customer<input name="customer_name" value="${esc(r?.customer_name || "")}" required autocomplete="off"></label>
+    <label>Device type<input name="device_type" list="dl_dev" value="${esc(r?.device_type || "")}" required autocomplete="off"><datalist id="dl_dev">${["CCTV camera", "NVR / DVR", "Router", "Switch", "Access point", "UPS", "Laptop", "Desktop computer", "Printer", "Phone", "Distribution board", "Other"].map(x => `<option>${x}</option>`).join("")}</datalist></label>
+    <label>Make / model<input name="make_model" value="${esc(r?.make_model || "")}" autocomplete="off"></label>
+    <label>Serial number<input name="serial_no" value="${esc(r?.serial_no || "")}" autocomplete="off"></label><label>MAC address / IMEI<input name="mac_imei" value="${esc(r?.mac_imei || "")}" autocomplete="off"></label>
+    <label class="full">Location on site<input name="location" value="${esc(r?.location || "")}" placeholder="e.g. Main gate, server room, ward 2" autocomplete="off"></label>
+    <label>Install date<input name="installed_on" type="date" value="${esc(r?.installed_on || "")}"></label><label>Warranty ends<input name="warranty_end" type="date" value="${esc(r?.warranty_end || "")}"></label>
+    <label>Repair it came from (e.g. JC-0012)<input name="repair_ref" value="${esc(ref[0])}" autocomplete="off"></label><label>Field job it belongs to (e.g. J-004)<input name="job_ref" value="${esc(jref)}" autocomplete="off"></label>
+    <label class="full">Notes<input name="notes" value="${esc(r?.notes || "")}"></label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.oninput = null; f.onclick = null;
+  f.onchange = e => { if (e.target.name === "account_id") { const x = accounts.find(y => String(y.id) === e.target.value); if (x && !f.elements.customer_name.value.trim()) f.elements.customer_name.value = x.name; } };
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements, v = k => el[k] && el[k].value.trim() || null;
+    let repair_id = null, job_id = null; const rr = (v("repair_ref") || "").toUpperCase(), jj = (v("job_ref") || "").toUpperCase();
+    if (rr) { const m = rr.match(/^JC-?0*(\d+)$/); if (!m) return toast("A repair number looks like JC-0012."); repair_id = Number(m[1]); const x = await db.from("repairs").select("id").eq("id", repair_id); if (x.error || !(x.data || []).length) return toast("There is no repair " + rr + "."); }
+    if (jj) { const j = jobs.find(y => String(y.job_no).toUpperCase() === jj); if (!j) return toast("There is no field job " + jj + "."); job_id = j.id; }
+    const row = { account_id: v("account_id") ? Number(v("account_id")) : null, customer_name: v("customer_name"), device_type: v("device_type"), make_model: v("make_model"), serial_no: v("serial_no"), mac_imei: v("mac_imei"), location: v("location"), installed_on: v("installed_on"), warranty_end: v("warranty_end"), repair_id, job_id, notes: v("notes") };
+    if (row.installed_on && row.warranty_end && row.warranty_end < row.installed_on) return toast("The warranty cannot end before the install date.");
+    const x = r ? await db.from("equipment").update(row).eq("id", r.id) : await db.from("equipment").insert(row); if (x.error) return toast(x.error.message); $("#dlg").close(); toast("Saved"); equipmentPage(); };
+  $("#dlg").showModal();
+}
+// ---- company documents vault (files are in a private storage bucket called "vault")
+const VAULT_KINDS = ["Tax compliance certificate (TCC)", "CR12", "Certificate of incorporation", "Business permit", "Other"];
+async function vaultPage() {
+  const rows = (must(await db.from("company_docs").select("*").order("expires_on", { ascending: true, nullsFirst: false }).limit(500)) || []);
+  const sms = await db.rpc("vault_remind", {});
+  const noPhone = sms.data && sms.data.problem === "no_phone";
+  $("#view").innerHTML = `<h2>Company documents</h2><p style="color:var(--mut);margin-top:0">Keep your tax compliance certificate, CR12, certificate of incorporation and permits here. You get a Dashboard warning and a text message 30 days, 14 days and 7 days before one expires, and on the day.</p>
+    ${noPhone ? `<p class="box" style="border-color:#b54708">Add your phone number to your user profile (Users &amp; roles) so the reminders can be texted to you.</p>` : ""}
+    <div class="bar"><button class="btn" id="vnew">+ Add a document</button></div>
+    <div class="wrap"><table><thead><tr><th>Document</th><th>Number</th><th>Issued</th><th>Expires</th><th>File</th><th></th></tr></thead><tbody id="vtb">${rows.map((r, i) => `<tr><td><b>${esc(r.title)}</b><br><small>${esc(r.kind)}</small></td><td>${esc(r.number || "")}</td><td>${esc(r.issued_on || "")}</td><td>${r.expires_on ? dueTag(r.expires_on, 30, "Expires") : "<small>no expiry</small>"}</td><td>${r.file_path ? `<button class="btn sm ghost" data-o="${i}">Open</button>` : "<small>no file</small>"}</td>
+      <td class="acts"><button class="btn sm" data-e="${i}">Edit</button> <button class="btn sm warn" data-d="${i}">Delete</button></td></tr>`).join("") || `<tr><td colspan="6">Nothing yet. Press “+ Add a document”.</td></tr>`}</tbody></table></div>`;
+  $("#vnew").onclick = () => vaultForm(null);
+  $("#vtb").onclick = async e => { const b = e.target.closest("button"); if (!b) return; const k = Object.keys(b.dataset)[0], r = rows[b.dataset[k]];
+    if (k === "e") vaultForm(r);
+    else if (k === "o") { if (!db.storage) return toast("Files are not available here."); const u = await db.storage.from("vault").createSignedUrl(r.file_path, 120); if (u.error) return toast("Could not open the file: " + u.error.message + " (run database/storage_v21.sql once)"); window.open(u.data.signedUrl, "_blank"); }
+    else if (k === "d" && confirm("Delete this document and its file?")) { if (r.file_path && db.storage) await db.storage.from("vault").remove([r.file_path]); const x = await db.from("company_docs").delete().eq("id", r.id); if (x.error) toast(x.error.message); else vaultPage(); } };
+}
+function vaultForm(r) {
+  const f = $("#dlgForm"); let path = r?.file_path || null, fname = r?.file_name || null;
+  f.innerHTML = `<h2>${r ? "Edit" : "Add"} company document</h2><div class="grid"><label>Type<select name="kind">${VAULT_KINDS.map(k => `<option ${r && r.kind === k ? "selected" : ""}>${esc(k)}</option>`).join("")}</select></label><label>Name<input name="title" value="${esc(r?.title || "")}" required placeholder="e.g. TCC 2026" autocomplete="off"></label>
+    <label>Number<input name="number" value="${esc(r?.number || "")}" autocomplete="off"></label><label>Issued on<input name="issued_on" type="date" value="${esc(r?.issued_on || "")}"></label><label>Expires on (leave empty if it never expires)<input name="expires_on" type="date" value="${esc(r?.expires_on || "")}"></label>
+    <label class="full">File (PDF or photo, up to 5 MB)<input type="file" name="file" accept="application/pdf,image/*"><small id="vmsg" style="color:var(--mut)">${fname ? "Current file: " + esc(fname) : ""}</small></label><label class="full">Notes<input name="notes" value="${esc(r?.notes || "")}"></label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.oninput = null; f.onclick = null; f.onchange = null;
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements, file = el.file.files[0], v = k => el[k].value.trim() || null;
+    if (file) { if (!db.storage) return toast("Files are not available here."); if (file.size > 5 * 1024 * 1024) return toast("That file is over 5 MB.");
+      const np = Date.now() + "-" + file.name.toLowerCase().replace(/[^a-z0-9.]+/g, "-").slice(-60); $("#vmsg").textContent = "Uploading…";
+      const up = await db.storage.from("vault").upload(np, file, { contentType: file.type, upsert: false }); if (up.error) { $("#vmsg").textContent = ""; return toast("Upload failed: " + up.error.message + " (run database/storage_v21.sql once)"); }
+      if (path) await db.storage.from("vault").remove([path]); path = np; fname = file.name; }
+    const row = { kind: el.kind.value, title: v("title"), number: v("number"), issued_on: v("issued_on"), expires_on: v("expires_on"), notes: v("notes"), file_path: path, file_name: fname };
+    const x = r ? await db.from("company_docs").update(row).eq("id", r.id) : await db.from("company_docs").insert(row); if (x.error) return toast(x.error.message);
+    $("#dlg").close(); toast("Saved"); await db.rpc("vault_remind", {}); vaultPage(); };
+  $("#dlg").showModal();
+}
+// ---- website projects: finished jobs shown on the homepage and the Projects page
+async function projectsPage() {
+  const rows = must(await db.from("site_projects").select("*").order("id", { ascending: false }).limit(300)) || [];
+  const jr = can("jobs.view") ? await db.from("field_jobs").select("id,job_no,client_name,job_type,completed_on,status").eq("status", "Completed") : { data: [] };
+  const jobs = (jr.data || []), free = jobs.filter(j => !rows.some(p => p.job_id === j.id));
+  $("#view").innerHTML = `<h2>Website projects</h2><p style="color:var(--mut);margin-top:0">Show finished work on the website. A project needs a completed field job, at least one photo, and a tick that the client agreed. The three newest published projects show on the home page.</p>
+    <div class="bar"><select id="pj"><option value="">Choose a completed job…</option>${free.map(j => `<option value="${j.id}">${esc(j.job_no)} · ${esc(j.client_name)} · ${esc(j.job_type || "")}</option>`).join("")}</select><button class="btn" id="pnew">Show it on the website</button></div>
+    <div class="wrap"><table><thead><tr><th>Project</th><th>Job</th><th>Photos</th><th>Client agreed</th><th>On the website</th><th></th></tr></thead><tbody id="ptb">${rows.map((p, i) => `<tr><td><b>${esc(p.title)}</b><br><small>${esc(p.client_label || "")}</small></td><td>${esc((jobs.find(j => j.id === p.job_id) || {}).job_no || "")}</td><td>${(p.photos || []).length}</td><td>${p.client_ok ? "Yes" : "No"}</td><td><span class="tag ${p.published ? "ok" : "draft"}">${p.published ? "Published" : "Hidden"}</span></td><td class="acts"><button class="btn sm" data-e="${i}">Edit</button> <button class="btn sm warn" data-d="${i}">Delete</button></td></tr>`).join("") || `<tr><td colspan="6">No projects yet.</td></tr>`}</tbody></table></div>`;
+  $("#pnew").onclick = () => { const id = Number($("#pj").value); if (!id) return toast("Choose a completed job first."); projectDialog(jobs.find(j => j.id === id), null); };
+  $("#ptb").onclick = async e => { const b = e.target.closest("button"); if (!b) return; const k = Object.keys(b.dataset)[0], p = rows[b.dataset[k]];
+    if (k === "e") projectDialog(jobs.find(j => j.id === p.job_id) || null, p);
+    else if (k === "d" && confirm("Delete this project from the website?")) { const x = await db.from("site_projects").delete().eq("id", p.id); if (x.error) toast(x.error.message); else projectsPage(); } };
+}
+async function projectDialog(job, p, after) {
+  const f = $("#dlgForm"); let photos = (p?.photos || []).slice();
+  if (!p && job) { const ex = await db.from("site_projects").select("*").eq("job_id", job.id); const e0 = Array.isArray(ex.data) ? ex.data[0] : ex.data; if (e0) { p = e0; photos = (p.photos || []).slice(); } }
+  const draw = () => { f.innerHTML = `<h2>${p ? "Edit" : "New"} website project</h2><p style="margin-top:0">${job ? "From job " + esc(job.job_no) + " (" + esc(job.client_name) + "). The client's name is not shown on the website unless you type it below." : ""}</p><div class="grid">
+    <label class="full">Title (shown on the website)<input name="title" value="${esc(p?.title || (job ? (job.job_type || "Project") : ""))}" required minlength="3" maxlength="90" autocomplete="off"></label>
+    <label class="full">Short description (what was done)<input name="summary" value="${esc(p?.summary || "")}" maxlength="400" autocomplete="off"></label>
+    <label>Who it was for (optional, e.g. “A school in Meru”)<input name="client_label" value="${esc(p?.client_label || "")}" maxlength="80" autocomplete="off"></label>
+    <label>Finished on<input name="completed_on" type="date" value="${esc(p?.completed_on || job?.completed_on || "")}"></label>
+    <div class="full"><b>Photos</b> <small style="color:var(--mut)">(up to 8; the first one is the cover)</small><div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">${photos.map((u, i) => `<span style="position:relative"><img src="${esc(u)}" alt="" style="height:70px;width:90px;object-fit:cover;border-radius:8px"><button type="button" class="btn sm warn" data-rp="${i}" style="position:absolute;top:2px;right:2px;padding:0 6px">✕</button></span>`).join("")}</div>
+      <input type="file" name="pic" accept="image/*" multiple><small id="pmsg" style="color:var(--mut)"></small><label style="margin-top:6px">…or paste a photo address<input name="url" placeholder="https://…" autocomplete="off"></label><button type="button" class="btn sm ghost" id="purl">Add that address</button></div>
+    <label class="full" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="client_ok" ${p?.client_ok ? "checked" : ""} style="width:auto"> The client agreed to us showing this work and these photos</label>
+    <label class="full" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="published" ${p?.published ? "checked" : ""} style="width:auto"> Show it on the website now</label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`; };
+  const keep = () => { for (const k of ["title", "summary", "client_label", "completed_on"]) if (f.elements[k]) (p = p || {})[k] = f.elements[k].value; if (f.elements.client_ok) { (p = p || {}).client_ok = f.elements.client_ok.checked; p.published = f.elements.published.checked; } };
+  draw(); f.oninput = null;
+  f.onclick = e => { const b = e.target.closest("[data-rp]"); if (b) { keep(); photos.splice(Number(b.dataset.rp), 1); draw(); } if (e.target.id === "purl") { const u = f.elements.url.value.trim(); if (!/^https?:\/\/\S+$/.test(u)) return toast("That does not look like a web address."); if (photos.length >= 8) return toast("Eight photos at most."); keep(); photos.push(u); draw(); } };
+  f.onchange = async e => { if (e.target.name !== "pic") return; const files = [...e.target.files], msg = $("#pmsg"); if (!db.storage) { msg.textContent = "Photo upload is not available here. Paste a photo address instead."; return; } keep();
+    for (const file of files) { if (photos.length >= 8) break; if (file.size > 3 * 1024 * 1024) { msg.textContent = file.name + " is over 3 MB and was skipped."; continue; } msg.textContent = "Uploading " + file.name + "…";
+      const np = "projects/" + Date.now() + "-" + file.name.toLowerCase().replace(/[^a-z0-9.]+/g, "-").slice(-50), up = await db.storage.from("shop").upload(np, file, { contentType: file.type, upsert: false });
+      if (up.error) { msg.textContent = "Upload failed: " + up.error.message + " (run database/storage_v21.sql once)"; continue; } photos.push(db.storage.from("shop").getPublicUrl(np).data.publicUrl); }
+    draw(); };
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements;
+    const row = { job_id: job ? job.id : (p?.job_id ?? null), title: el.title.value.trim(), summary: el.summary.value.trim() || null, client_label: el.client_label.value.trim() || null, job_type: job?.job_type || p?.job_type || null, completed_on: el.completed_on.value || null, photos, client_ok: el.client_ok.checked, published: el.published.checked };
+    const x = p && p.id ? await db.from("site_projects").update(row).eq("id", p.id) : await db.from("site_projects").insert(row); if (x.error) return toast(x.error.message);
+    $("#dlg").close(); toast(row.published ? "Saved and shown on the website" : "Saved (not shown on the website)"); (after || projectsPage)(); };
+  $("#dlg").showModal();
+}
+// ---- website policy pages
+async function policiesPage() {
+  const rows = must(await db.from("site_policies").select("*")) || [], order = ["customer-service", "warranty-returns", "anti-bribery"];
+  rows.sort((a, b) => order.indexOf(a.slug) - order.indexOf(b.slug));
+  $("#view").innerHTML = `<h2>Website policies</h2><p style="color:var(--mut);margin-top:0">These three pages appear on the website under Policies. Write your own text below. A blank line starts a new paragraph, and a line that begins with “## ” becomes a heading.</p>
+    ${rows.map((r, i) => `<form class="card" data-i="${i}" style="margin-bottom:14px"><label>Title<input name="title" value="${esc(r.title)}" maxlength="120"></label><label style="margin-top:8px">Text<textarea name="body" rows="9" style="width:100%">${esc(r.body)}</textarea></label>
+      <div class="bar" style="margin-top:8px"><button class="btn" type="submit">Save</button><a class="btn ghost" href="policy.html?p=${esc(r.slug)}" target="_blank" rel="noopener">View on the website</a><small style="color:var(--mut)">Last changed ${esc(String(r.updated_at || "").slice(0, 10))}</small></div></form>`).join("")}`;
+  $("#view").onsubmit = async e => { e.preventDefault(); const f = e.target.closest("form"), r = rows[f.dataset.i]; const x = await db.from("site_policies").update({ title: f.elements.title.value, body: f.elements.body.value }).eq("slug", r.slug); if (x.error) return toast(x.error.message); toast("Saved. It is live on the website now."); };
+}
+
 async function quotesPage() {
   await loadCompany();
   const all = (must(await db.from("documents").select("*").eq("doc_type", "Quotation").eq("status", "Issued").order("id", { ascending: false }).limit(2000)) || []).filter(r => r.quote_state);
@@ -1491,7 +1623,7 @@ async function route() {
   if (nv && nv[2] && !can(nv[2]) && !(k === "suppliers")) { $("#view").innerHTML = `<h2>Not allowed</h2><p>Your role (${esc(roleName(me.role))}) does not include this page. Ask the owner if you need it.</p>`; return; }
   const decorate = () => { const h = document.querySelector("#view > h2"); if (h) { const w = document.createElement("div"); w.className = "pagehead"; w.innerHTML = BRAND.icon(k, 22); h.replaceWith(w); w.appendChild(h); } };
   try { if (k === "dashboard") await dashboard(); else if (k === "lists") await listsPage(); else if (k === "docs") await docsPage(); else if (k === "eod") await eodPage(); else if (k === "monthly") await monthlyPage(); else if (k === "summary") await summaryPage();
-    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
+    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "equipment") await equipmentPage(); else if (k === "vault") await vaultPage(); else if (k === "projects") await projectsPage(); else if (k === "policies") await policiesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
 }
 async function start() {
   const { data: { session } } = await db.auth.getSession();
