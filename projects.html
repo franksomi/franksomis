@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Our projects | Franksomi Solution Ltd</title><meta name="description" content="Recent CCTV, electrical, networking and ICT projects completed by Franksomi Solution Ltd in Kenya."><meta name="theme-color" content="#0E152B">
+<link rel="icon" href="media/emblem.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap"><link rel="stylesheet" href="web.css">
+<link rel="manifest" href="site.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
+
+<section class="shophead"><div class="wrap"><span class="kicker">Our work</span><h1 style="font-size:clamp(1.8rem,5vw,2.8rem)">Recent projects</h1><p>A selection of finished jobs, shared with our clients' permission.</p></div></section>
+<main id="main" class="wrap" style="padding:40px 18px 70px">
+<div id="list" class="grid g3"></div><p id="none" class="center" style="color:var(--mut)" hidden>Projects will be added here soon.</p><div class="cta-band" style="margin-top:50px"><div><h2>Need something similar?</h2><p style="margin:6px 0 0;color:#c9d6f0">Tell us about your site and we will reply with a written quotation.</p></div><div><a class="btn" href="index.html#contact">Request a quote</a></div></div>
+</main>
+<div id="siteFooter"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script>
+<script>(function(){WEB.chrome("projects.html");
+var esc=WEB.esc;
+function card(p){var ph=(p.photos||[]);var d=p.date?new Date(p.date+"T12:00:00").toLocaleDateString("en-GB",{month:"long",year:"numeric"}):"";
+  return '<article class="card proj">'+(ph[0]?'<img src="'+esc(ph[0])+'" alt="'+esc(p.title)+'" loading="lazy" style="width:100%;height:190px;object-fit:cover;border-radius:10px;margin-bottom:12px">':'')+
+  '<h3 style="margin:0 0 6px">'+esc(p.title)+'</h3><p style="margin:0 0 8px;color:var(--mut);font-size:.88rem">'+[p.type,p.client,d].filter(Boolean).map(esc).join(" · ")+'</p>'+(p.summary?'<p style="margin:0">'+esc(p.summary)+'</p>':'')+
+  (ph.length>1?'<div style="display:flex;gap:6px;margin-top:12px;overflow:auto">'+ph.slice(1).map(function(u){return '<img src="'+esc(u)+'" alt="" loading="lazy" style="height:56px;width:76px;object-fit:cover;border-radius:6px">'}).join("")+'</div>':'')+'</article>';}
+(async function(){var L=document.getElementById("list");if(!WEB.db){document.getElementById("none").hidden=false;return}
+  var r=await WEB.db.rpc("site_projects",{p_limit:60});var rows=(r.data||[]);if(!rows.length){document.getElementById("none").hidden=false;return}
+  L.innerHTML=rows.map(card).join("")})();
+})();</script>
+<script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>
