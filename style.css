@@ -81,3 +81,8 @@ header .btn.ghost,.hero .btn.ghost{background:transparent;color:#fff;border:1px 
 .xbox h3{margin:0 0 8px;font-size:14px}
 .xline{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;align-items:center}
 .xline .xi{flex:2 1 220px;min-width:0}.xline .xn{flex:2 1 180px;min-width:0}.xline .xq{flex:0 1 70px;width:70px}.xline .xp{flex:0 1 100px;width:100px}
+
+/* v19: document status tags */
+.tag.draft{background:#eef2f6;color:#475467}.tag.imp{background:#e0f2fe;color:#075985}
+td.acts{white-space:normal}td.acts .btn{margin:2px 2px 2px 0}
+.box{border:1px solid var(--line,#d0d5dd);border-radius:8px;padding:8px 12px;margin:8px 0}
