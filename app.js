@@ -700,7 +700,7 @@ async function docsPage() {
   all_docs_cache = all;
   const flt = { type: "", st: "", q: "" };
   const stTag = r => { const s = docSt(r); return `<span class="tag ${s === "Void" ? "bad" : s === "Draft" ? "draft" : "ok"}">${s}</span>${isImp(r) ? ` <span class="tag imp">Imported</span>` : ""}`; };
-  const etTag = r => ["Invoice", "Credit note"].includes(r.doc_type) && !isImp(r) && docSt(r) === "Issued" ? (r.etims_no ? `<small>${esc(r.etims_no)}</small>` : (COMPANY.etims_registered ? `<span class="tag bad">eTIMS missing</span>` : "")) : "";
+  const etTag = r => ["Invoice", "Credit note"].includes(r.doc_type) && docSt(r) === "Issued" ? (r.etims_no ? `<small>${esc(r.etims_no)}</small>` : (COMPANY.etims_registered && !isImp(r) ? `<span class="tag bad">eTIMS missing</span>` : "")) : "";
   let view = [];
   const btns = (r, i) => {
     const st = docSt(r), b = [], v19 = "status" in r;
@@ -709,6 +709,7 @@ async function docsPage() {
       if (v19 && can("docs.issue")) b.push(`<button class="btn sm" style="background:#12b76a" data-iss="${i}">Issue</button>`);
     }
     b.push(`<button class="btn sm pbtn" data-p="${i}">Print</button>`);
+    if (isImp(r) && st === "Issued" && can("docs.issue") && r.doc_type === "Invoice") b.push(`<button class="btn sm ghost" data-et="${i}">eTIMS no.</button>`);
     if (!isImp(r) && st === "Issued") {
       if (can("docs.issue") && r.doc_type !== "Credit note") b.push(`<button class="btn sm ghost" data-rev="${i}">Revise</button>`);
       if (can("docs.issue") && ["Invoice", "Credit note"].includes(r.doc_type)) b.push(`<button class="btn sm ghost" data-et="${i}">eTIMS no.</button>`);
