@@ -52,7 +52,7 @@ const T = {
       ["unit_cost", "Unit cost (KES)", "number", { owner: 1 }], ["selling_price", "Selling price (KES)", "number"], ["supplier_id", "Supplier", "supplier"], ["reorder_level", "Reorder level", "number"], ["notes", "Notes", "text", { full: 1 }],
       ["shop_visible", "Sell this item in the online shop (needs a selling price and stock)", "check"], ["shop_featured", "Show as Popular on the website", "check"],
       ["shop_title", "Shop name (leave empty to use the description)", "text"], ["shop_image", "Photo (web address, or choose a file to upload)", "image", { full: 1 }], ["shop_desc", "Shop description (one or two sentences)", "text", { full: 1 }]] },
-  jobs: { title: "Field Jobs", view: "v_jobs", perm: "jobs", table: "field_jobs", order: "id", print: "fieldcard", mpay: "job",
+  jobs: { title: "Field Jobs", view: "v_jobs", perm: "jobs", table: "field_jobs", order: "id", print: "fieldcard", mpay: "job", margin: 1,
     cols: [["job_no", "Job No."], ["started_on", "Started"], ["client_name", "Client"], ["site", "Site"], ["job_type", "Type"], ["contract_price", "Price", "n"], ["paid", "Paid", "n"], ["balance", "Balance", "n"], ["job_profit", "Job profit", "n", "owner"], ["status", "Stage", "tag"]],
     fields: [["started_on", "Date started", "date", { today: 1 }], ["client_name", "Client name", "text", { req: 1 }], ["contact", "Contact", "text"], ["site", "Site / location", "text"],
       ["job_type", "Job type", "select:Electrical installation,CCTV installation,Electrical repair,CCTV repair,Transport / logistics,Other"],
@@ -79,7 +79,7 @@ const T = {
     fields: [["name", "Supplier name", "text", { req: 1 }], ["contact_person", "Contact person", "text"], ["phone", "Phone", "text"], ["location", "Location", "text"], ["supplies", "What they supply", "text", { full: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
 };
 const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
-  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
+  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["quotes", "Open quotes", "docs.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
   ["mpay", "M-Pesa checkout", "mpay.use"], ["sms", "SMS messages", "sms.manage"], ["eod", "End of day", "eod.view"], ["monthly", "Monthly report", "reports.view+costs.view"], ["summary", "Year summary", "reports.view+costs.view"],
   ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["payables", "Supplier payables", "payables.view"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["users", "Users & roles", "users.manage"]];
 const navFor = () => NAV.filter(n => !n[2] || can(n[2]));
@@ -265,7 +265,7 @@ async function tablePage(key) {
     const v = r[k]; if (t === "tag") return `<td><span class="tag ${v === "REORDER" || v === "In shop" ? "bad" : "ok"}">${esc(v)}</span></td>`;
     return `<td class="${t === "n" ? "n" : ""}">${t === "n" ? kes(v) : t === "dt" ? esc(String(v || "").replace("T", " ").slice(0, 16)) : t === "yn" ? (v ? "Yes" : "") : t === "acct" ? esc(acctName(v)) : esc(v)}</td>`; }).join("")}
     <td>${pm(def, "edit") ? `<button class="btn sm" data-edit="${i}">Edit</button>` : ""} ${def.print ? `<button class="btn sm pbtn" data-print="${i}">Print card</button>` : ""}
-    ${def.mpay && can("mpay.use") ? `<button class="btn sm" style="background:#12b76a" data-pay="${i}">M-Pesa</button>` : ""}${def.mpay === "repair" ? ` <button class="btn sm wabtn" data-wa="${i}">Send tracking link</button>` : ""}
+    ${def.margin && can("costs.view") ? `<button class="btn sm ghost" data-mg="${i}">Margin</button>` : ""}${def.mpay && can("mpay.use") ? `<button class="btn sm" style="background:#12b76a" data-pay="${i}">M-Pesa</button>` : ""}${def.mpay === "repair" ? ` <button class="btn sm wabtn" data-wa="${i}">Send tracking link</button>` : ""}
     ${pm(def, "delete") ? `<button class="btn sm warn" data-del="${i}">Delete</button>` : ""}</td></tr>`).join("");
   if (def.quick) await refreshLookups();
   const quickBar = def.quick ? `<div class="bar" id="quick">${catalog.filter(c => c.active).map(c => `<button class="btn sm ghost" data-svc="${esc(c.name)}" title="KES ${c.default_price} per ${esc(c.unit)}">${esc(c.name.split(" (")[0])}</button>`).join("")}</div>` : "";
@@ -279,6 +279,7 @@ async function tablePage(key) {
     if (b.dataset.edit) openForm(key, rows[b.dataset.edit]);
     if (b.dataset.del && confirm("Delete this record? This cannot be undone.")) { const r = await db.from(def.table).delete().eq("id", rows[b.dataset.del].id); if (r.error) toast(r.error.message); else route(); }
     if (b.dataset.print) { let r = rows[b.dataset.print]; if (def.print === "jobcard") r = { ...r, ...(await repairChecks(r.id)), items: await repairItems(r.id) }; printCard(def.print, r); }
+    if (b.dataset.mg) marginDialog("field_job", rows[b.dataset.mg]);
     if (b.dataset.pay) { const r = rows[b.dataset.pay]; mpayDialog(def.mpay === "repair"
       ? { phone: r.contact, amount: Math.max(0, Math.floor(r.balance_due || 0)) || "", ref: "JC-" + String(r.id).padStart(4, "0"), purpose: "Repair payment", auto: true, name: r.customer_name }
       : { phone: r.contact, amount: Math.max(0, Math.floor(r.balance || 0)) || "", ref: r.job_no, purpose: "Job payment " + r.job_no, auto: true, name: r.client_name }); }
@@ -410,6 +411,7 @@ async function dashboard() {
   add(d.orders_open, "online order(s) to handle", "orders", "orders");
   add(d.enquiries_new, "new website enquiry(ies)", "enquiries", "enquiries");
   add(d.chat_waiting, "live chat(s) waiting", "chat", "chat");
+  if (ex.quotes) add(ex.quotes.due, "quotation(s) to follow up", "quotes", "docs");
   add(ex.etims_missing, "issued invoice(s) / credit note(s) missing an eTIMS number", "docs", "docs");
   if (ex.payables) add(Number(ex.payables.overdue) > 0 ? 1 : 0, "supplier bill(s) overdue: KES " + kes(ex.payables.overdue), "payables", "payables");
   if (ex.payables && Number(ex.payables.due7) > Number(ex.payables.overdue)) add(1, "KES " + kes(Number(ex.payables.due7) - Number(ex.payables.overdue)) + " supplier bills due this week", "payables", "payables");
@@ -428,6 +430,7 @@ async function dashboard() {
     <div class="charts">${ex.daily ? `<div class="panel wide"><h3>Last 14 days: income and expenses</h3>${dayChart(ex.daily)}</div>` : ""}${pipe ? `<div class="panel"><h3>Repairs in the shop, by stage</h3>${pipe}</div>` : ""}
       ${src && src.length ? `<div class="panel"><h3>Where income comes from (${yr})</h3>${BRAND.donut(src, "Income")}</div>` : ""}${sm ? `<div class="panel"><h3>Money received by payment method (${yr})</h3>${BRAND.donut(pay, "Received")}</div>` : ""}
       ${ex.expense_cats ? `<div class="panel"><h3>Where the money goes (${yr})</h3>${hbars(ex.expense_cats.map(x => ({ l: x.category, v: x.amount })), "#ff914d")}</div>` : ""}
+      ${ex.quotes && (Number(ex.quotes.open) || ex.quotes.rate != null) ? `<div class="panel"><h3>Quotations</h3><p style="margin:0 0 6px"><b>${ex.quotes.open}</b> open, worth <b>KES ${kes(ex.quotes.open_value)}</b></p><p style="margin:0">Win rate, last 12 months: <b>${ex.quotes.rate == null ? "not enough yet" : ex.quotes.rate + "%"}</b>${ex.quotes.rate == null ? "" : ` <small style="color:var(--mut)">(${ex.quotes.won} won · ${ex.quotes.lost} lost · ${ex.quotes.expired} expired)</small>`}</p><p style="margin:8px 0 0"><a href="#quotes">Open quotations</a></p></div>` : ""}
       ${ex.top_items ? `<div class="panel"><h3>Best sellers, last 30 days</h3>${hbars(ex.top_items.map(x => ({ l: x.item, v: x.sales, t: "KES " + kes(x.sales) })), "#12b76a")}</div>` : ""}
       ${ex.jobs_stage && ex.jobs_stage.length ? `<div class="panel"><h3>Field jobs, by stage</h3>${hbars(ex.jobs_stage.map(x => ({ l: x.stage, v: x.n, t: String(x.n) })))}</div>` : ""}
       ${ex.orders_stage && ex.orders_stage.length ? `<div class="panel"><h3>Online orders still open, by stage</h3>${hbars(ex.orders_stage.map(x => ({ l: x.stage, v: x.n, t: String(x.n) })), "#7a5af8")}</div>` : ""}
@@ -442,6 +445,7 @@ const acctNo = id => "ACC-" + String(id).padStart(4, "0");
 const acctName = id => { if (id == null || id === "") return ""; const a = accounts.find(x => String(x.id) === String(id)); return a ? a.name : acctNo(id); };
 const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 async function accountsPage() {
+  if (can("accounts.edit")) { const rr = await db.rpc("recurring_run", {}); if (!rr.error && rr.data && rr.data.posted) toast(rr.data.posted + " monthly charge(s) posted to accounts"); }
   const rows = must(await db.from("credit_balances").select("*").order("name")) || [], edit = can("accounts.edit");
   const owed = rows.reduce((s, r) => s + Math.max(Number(r.balance), 0), 0), over = rows.reduce((s, r) => s + Math.max(Number(r.overdue), 0), 0);
   let showAll = sessionStorage.getItem("acall") === "1";
@@ -454,11 +458,12 @@ async function accountsPage() {
   };
   $("#view").innerHTML = `<h2>Credit accounts</h2><p style="color:var(--mut);margin-top:0">For customers billed at the end of the month. Choose <b>On account</b> as the payment method when you record a sale, printing/cyber entry or repair payment, or use <b>Charge</b> below. Open <b>Statement</b> at month end to print or SMS it, and use <b>Receive payment</b> when they pay.</p>
     <div class="cards"><div class="card"><small>Total owed to you</small><b>KES ${kes(owed)}</b></div><div class="card"><small>Older than 30 days</small><b>KES ${kes(over)}</b></div><div class="card"><small>Accounts</small><b>${rows.filter(r => r.active).length}</b></div></div>
-    <div class="bar">${edit ? `<button class="btn" id="anew">+ New account</button><button class="btn ghost" id="asms">SMS balance reminders</button>` : ""}<input id="aq" placeholder="Search…" style="max-width:240px"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="aall" ${showAll ? "checked" : ""} style="width:auto"> Show switched-off</label></div>
+    <div class="bar">${edit ? `<button class="btn" id="anew">+ New account</button><button class="btn ghost" id="asms">SMS balance reminders</button>` : ""}<button class="btn ghost" id="arec">Monthly charges</button><input id="aq" placeholder="Search…" style="max-width:240px"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="aall" ${showAll ? "checked" : ""} style="width:auto"> Show switched-off</label></div>
     <div class="wrap"><table><thead><tr><th>Account</th><th>Contact</th><th>Balance (KES)</th><th>Over 30 days</th><th>Limit</th><th>Last paid</th><th></th></tr></thead><tbody id="atb"></tbody></table></div>`;
   draw(); $("#aq").oninput = draw; $("#aall").onchange = e => { showAll = e.target.checked; sessionStorage.setItem("acall", showAll ? "1" : "0"); draw(); };
   const byId = id => rows.find(r => String(r.id) === String(id));
   if ($("#anew")) $("#anew").onclick = () => accountForm(null);
+  if ($("#arec")) $("#arec").onclick = recurringDialog;
   if ($("#asms")) $("#asms").onclick = async () => { if (!confirm("Send every account that owes money an SMS with its balance?")) return; const r = await db.rpc("account_send_statements", {}); if (r.error) return toast(r.error.message); toast(`${r.data.queued} reminder(s) queued`); };
   $("#atb").onclick = e => { const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.st) statementDialog(byId(b.dataset.st)); if (b.dataset.rc) receiveDialog(byId(b.dataset.rc)); if (b.dataset.ch) chargeDialog(byId(b.dataset.ch)); if (b.dataset.ed) accountForm(byId(b.dataset.ed)); };
@@ -693,13 +698,13 @@ function docTotals(d) {
   const vat = (sub - disc) * Number(d.vat_rate || 0) / 100, total = sub - disc + vat;
   return { sub, vat, total, balance: total - Number(d.paid_before || 0) };
 }
-const EV_LABEL = { issued: "Issued", revised: "Revised", etims: "eTIMS number", voided: "Voided", cancelled: "Cancelled with credit note", converted: "Converted to invoice", delivery_note: "Delivery note made", created: "Created" };
+const EV_LABEL = { issued: "Issued", revised: "Revised", etims: "eTIMS number", voided: "Voided", cancelled: "Cancelled with credit note", converted: "Converted to invoice", quote_sent: "Quotation marked open", quote_accepted: "Quotation accepted", quote_lost: "Quotation lost", quote_expired: "Quotation expired", delivery_note: "Delivery note made", created: "Created" };
 async function docsPage() {
   await Promise.all([loadCompany(), refreshLookups()]);
   const all = (must(await db.from("documents").select("*").order("id", { ascending: false }).limit(2000)) || []).sort((a, b) => String(b.doc_date || "").localeCompare(String(a.doc_date || "")) || b.id - a.id);
   all_docs_cache = all;
   const flt = { type: "", st: "", q: "" };
-  const stTag = r => { const s = docSt(r); return `<span class="tag ${s === "Void" ? "bad" : s === "Draft" ? "draft" : "ok"}">${s}</span>${isImp(r) ? ` <span class="tag imp">Imported</span>` : ""}`; };
+  const stTag = r => { const s = docSt(r); return `<span class="tag ${s === "Void" ? "bad" : s === "Draft" ? "draft" : "ok"}">${s}</span>${isImp(r) ? ` <span class="tag imp">Imported</span>` : ""}${qTag(r)}`; };
   const etTag = r => ["Invoice", "Credit note"].includes(r.doc_type) && docSt(r) === "Issued" ? (r.etims_no ? `<small>${esc(r.etims_no)}</small>` : (COMPANY.etims_registered && !isImp(r) ? `<span class="tag bad">eTIMS missing</span>` : "")) : "";
   let view = [];
   const btns = (r, i) => {
@@ -717,6 +722,8 @@ async function docsPage() {
       if (r.doc_type === "Invoice" && can("docs.void")) b.push(`<button class="btn sm warn" data-cx="${i}">Cancel with credit note</button>`);
       else if (can("docs.void") && !["Invoice", "Credit note"].includes(r.doc_type)) b.push(`<button class="btn sm warn" data-vd="${i}">Void</button>`);
     }
+    if (r.doc_type === "Quotation" && st === "Issued" && can("docs.issue") && (r.quote_state || isImp(r))) b.push(`<button class="btn sm ghost" data-qs="${i}">Quote status</button>`);
+    if (["Quotation", "Invoice"].includes(r.doc_type) && !isImp(r) && st !== "Void" && can("costs.view")) b.push(`<button class="btn sm ghost" data-mg="${i}">Margin</button>`);
     if (r.doc_type === "Quotation" && st !== "Void" && v19 && can("docs.add")) b.push(`<button class="btn sm ghost" data-cv="${i}">Convert to invoice</button>`);
     if (v19) b.push(`<button class="btn sm ghost" data-h="${i}">History</button>`);
     if (!isImp(r) && st === "Draft" && can("docs.delete")) b.push(`<button class="btn sm warn" data-d="${i}">Delete</button>`);
@@ -749,6 +756,8 @@ async function docsPage() {
     else if (D.iss) { const r = row("iss"); if (!confirm(`Issue ${docNo(r)}? Once issued it cannot be edited or deleted: it can only be revised or cancelled.`)) return; if (await rpc("doc_issue", { p_id: r.id }, x => "Issued " + x.doc_no + (r.doc_type === "Invoice" ? ". Add its eTIMS number when you have it." : ""))) docsPage(); }
     else if (D.rev) docForm(row("rev"), { revise: true });
     else if (D.et) etimsDialog(row("et"));
+    else if (D.qs) quoteDialog(row("qs"), docsPage);
+    else if (D.mg) marginDialog("document", row("mg"));
     else if (D.dn) { const r = row("dn"); const x = await rpc("doc_delivery_note", { p_invoice: r.id }); if (x) { await docsPage(); const nd = (await db.from("documents").select("*").eq("id", x.id)).data; dnForm(Array.isArray(nd) ? nd[0] : nd); } }
     else if (D.cx) reasonDialog(row("cx"), "Cancel invoice with a credit note", "This issues a credit note for the whole invoice and marks the invoice void. If it was charged to a credit account the balance is reversed. This cannot be undone.", "doc_cancel_invoice", "Cancel invoice", x => "Credit note " + x.credit_note + " issued");
     else if (D.vd) reasonDialog(row("vd"), "Void document", "A voided document stays on record but no longer counts.", "doc_void", "Void it", () => "Voided");
@@ -794,11 +803,17 @@ async function docForm(row, opts = {}) {
   if (!d.items.length) d.items.push(blank());
   const f = $("#dlgForm"), v19 = !row || "status" in row, rate = () => revise ? Number(d.vat_rate || 0) : (COMPANY.vat_registered ? COMPANY.vat_rate : 0);
   const accts = accounts.filter(a => a.active || a.id === d.account_id);
+  const hints = {}, hintTxt = h => h && h.found ? `Last charged KES ${kes(h.last)} (${h.last_date || "earlier"}${h.last_customer ? ", " + h.last_customer : ""}) · lowest ${kes(h.low)} · highest ${kes(h.high)} · seen ${h.times}×` : "";
+  const showHint = i => { const el = f.querySelector(`[data-ph="${i}"]`), q = String((d.items[i] || {}).desc || "").trim(); if (el) el.textContent = hintTxt(hints[q]); };
+  let ht; const lookup = (i, wait) => { clearTimeout(ht); ht = setTimeout(async () => { const q = String((d.items[i] || {}).desc || "").trim(); if (q.length < 3) return showHint(i);
+    if (!(q in hints)) { const r = await db.rpc("price_lookup", { p_desc: q }); hints[q] = r.error ? null : r.data; } showHint(i);
+    const sg = await db.rpc("price_suggest", { p_q: q }), dl = f.querySelector("#dl_items"); if (dl && !sg.error) dl.innerHTML = (sg.data || []).map(n => `<option value="${esc(n)}">`).join(""); }, wait); };
   const draw = () => {
     const inv = d.doc_type === "Invoice";
     f.innerHTML = `<h2>${revise ? "Revise " + esc(docNo(row)) + " (revision " + ((row.revision || 1) + 1) + ")" : row ? "Edit draft " + esc(docNo(row)) : "New document"}</h2>${revise ? `<p style="margin-top:0">The number stays the same. The earlier version is kept in the history.</p>` : ""}<div class="grid">
       <label>Type${revise ? `<input value="${esc(d.doc_type)}" disabled>` : `<select name="doc_type">${["Quotation", "Invoice", "Receipt"].map(x => `<option ${x === d.doc_type ? "selected" : ""}>${x}</option>`).join("")}</select>`}</label>
       <label>Date<input name="doc_date" type="date" value="${esc(d.doc_date || "")}"></label>
+      ${d.doc_type === "Quotation" ? `<label>Valid until<input name="valid_until" type="date" value="${esc(d.valid_until || plusDays(d.doc_date, 30))}"></label>` : ""}
       ${inv && !revise && accts.length ? `<label class="full">Charge to a credit account (optional: puts the balance on the customer's monthly account when issued)<select name="account_id"><option value="">— not on account —</option>${accts.map(a => `<option value="${a.id}" ${String(a.id) === String(d.account_id) ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></label>` : ""}
       <label>Customer<input name="customer" value="${esc(d.customer)}" required></label><label>Customer KRA PIN<input name="customer_pin" value="${esc(d.customer_pin || "")}" maxlength="11" placeholder="e.g. P051234567Z" autocomplete="off"></label>
       <label>Contact<input name="contact" value="${esc(d.contact)}"></label><label>Client LPO / PO number<input name="lpo_no" value="${esc(d.lpo_no || "")}" placeholder="e.g. P-ORD_17448" autocomplete="off"></label>
@@ -806,20 +821,20 @@ async function docForm(row, opts = {}) {
       <label>Discount (KES)<input name="discount" type="number" min="0" step="any" value="${d.discount || 0}"></label>
       ${d.doc_type !== "Quotation" ? `<label>Already paid (KES)<input name="paid_before" type="number" min="0" step="any" value="${d.paid_before || 0}"></label>` : ""}</div>
       ${inv && !revise ? `<p style="color:var(--mut);margin:6px 0 0">The eTIMS invoice number is added after you issue the invoice (button “eTIMS no.” in the list).</p>` : ""}
-      <h3>Items</h3>${d.items.map((it, i) => `<div class="grid" style="grid-template-columns:3fr 1fr 1fr auto;margin-bottom:6px"><input data-i="${i}" data-f="desc" value="${esc(it.desc)}" placeholder="Description"><input data-i="${i}" data-f="qty" type="number" min="0" step="any" value="${it.qty}"><input data-i="${i}" data-f="price" type="number" min="0" step="any" value="${it.price}"><button type="button" class="btn sm ghost" data-rm="${i}" title="Remove this line">✕</button></div>`).join("")}
+      <h3>Items</h3>${d.items.map((it, i) => `<div class="grid" style="grid-template-columns:3fr 1fr 1fr auto;margin-bottom:6px"><input data-i="${i}" data-f="desc" list="dl_items" value="${esc(it.desc)}" placeholder="Description" autocomplete="off"><input data-i="${i}" data-f="qty" type="number" min="0" step="any" value="${it.qty}"><input data-i="${i}" data-f="price" type="number" min="0" step="any" value="${it.price}"><button type="button" class="btn sm ghost" data-rm="${i}" title="Remove this line">✕</button><div data-ph="${i}" style="grid-column:1/-1;font-size:12px;color:var(--mut)"></div></div>`).join("")}<datalist id="dl_items"></datalist>
       <button type="button" class="btn sm ghost" id="addl">+ line</button> <b id="tot" style="margin-left:12px"></b>
       ${revise ? `<label class="full" style="margin-top:10px">Why are you revising it? (kept in the history)<input name="why" required maxlength="200" autocomplete="off"></label>` : ""}
       <div class="bar" style="margin-top:14px">${revise ? `<button class="btn" value="revise">Save revision</button>` : `<button class="btn" value="save">${v19 ? "Save draft" : "Save"}</button>${v19 && can("docs.issue") ? `<button class="btn" style="background:#12b76a" value="issue">Save and issue</button>` : ""}`}<button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
-    sync();
+    sync(); d.items.forEach((_, i) => { showHint(i); if (String(d.items[i].desc || "").trim().length >= 3) lookup(i, 60); });
   };
   const collect = () => {
-    for (const k of ["doc_type", "doc_date", "customer", "customer_pin", "contact", "lpo_no", "address", "reference"]) if (f.elements[k]) d[k] = f.elements[k].value.trim() || null;
+    for (const k of ["doc_type", "doc_date", "valid_until", "customer", "customer_pin", "contact", "lpo_no", "address", "reference"]) if (f.elements[k]) d[k] = f.elements[k].value.trim() || null;
     for (const k of ["discount", "paid_before"]) if (f.elements[k]) d[k] = Number(f.elements[k].value) || 0;
     if (f.elements.account_id) d.account_id = f.elements.account_id.value ? Number(f.elements.account_id.value) : null;
     f.querySelectorAll("[data-f]").forEach(el => d.items[el.dataset.i][el.dataset.f] = el.dataset.f === "desc" ? el.value : Number(el.value) || 0);
   };
   const sync = () => { const t = docTotals({ ...d, vat_rate: rate() }); $("#tot").textContent = (rate() > 0 ? `Subtotal ${kes(t.sub - Number(d.discount || 0))} + VAT ${rate()}% ${kes(t.vat)} = ` : "") + "Total KES " + kes(t.total); };
-  f.oninput = e => { if (!$("#tot")) return; if (e.target.name === "doc_type") { collect(); draw(); return; } collect(); sync(); };
+  f.oninput = e => { if (!$("#tot")) return; if (e.target.name === "doc_type") { collect(); draw(); return; } collect(); sync(); if (e.target.dataset.f === "desc") lookup(e.target.dataset.i, 350); };
   f.onchange = e => { if (!$("#tot")) return; if (e.target.name === "account_id") { const a = accounts.find(x => String(x.id) === e.target.value); collect(); if (a) { d.customer = a.name; d.customer_pin = a.kra_pin || d.customer_pin; draw(); } } };
   f.onclick = e => { if (!$("#tot")) return; if (e.target.id === "addl") { collect(); d.items.push(blank()); draw(); } if (e.target.dataset.rm) { collect(); d.items.splice(e.target.dataset.rm, 1); if (!d.items.length) d.items.push(blank()); draw(); } };
   f.onsubmit = async e => {
@@ -829,11 +844,11 @@ async function docForm(row, opts = {}) {
     const items = d.items.filter(i => String(i.desc || "").trim()).map(i => ({ desc: String(i.desc).trim(), qty: Number(i.qty) || 0, price: Number(i.price) || 0 }));
     if (revise) {
       const why = f.elements.why.value.trim(); if (!why) return toast("Say why you are revising it.");
-      const x = await db.rpc("doc_revise", { p_id: row.id, p_patch: { doc_date: d.doc_date, customer: d.customer, customer_pin: d.customer_pin, contact: d.contact, lpo_no: d.lpo_no, address: d.address, reference: d.reference, discount: d.discount, paid_before: d.paid_before || 0, items }, p_note: why });
+      const x = await db.rpc("doc_revise", { p_id: row.id, p_patch: { doc_date: d.doc_date, ...(d.doc_type === "Quotation" ? { valid_until: d.valid_until } : {}), customer: d.customer, customer_pin: d.customer_pin, contact: d.contact, lpo_no: d.lpo_no, address: d.address, reference: d.reference, discount: d.discount, paid_before: d.paid_before || 0, items }, p_note: why });
       if (x.error) return toast(x.error.message); $("#dlg").close(); toast("Saved as revision " + x.data.revision); return docsPage();
     }
     if (act === "issue" && !items.length) return toast("Add at least one item first.");
-    const payload = { doc_type: d.doc_type, doc_date: d.doc_date, customer: d.customer, customer_pin: d.customer_pin, contact: d.contact, lpo_no: d.lpo_no, address: d.address, reference: d.reference,
+    const payload = { doc_type: d.doc_type, doc_date: d.doc_date, valid_until: d.doc_type === "Quotation" ? d.valid_until || null : null, customer: d.customer, customer_pin: d.customer_pin, contact: d.contact, lpo_no: d.lpo_no, address: d.address, reference: d.reference,
       discount: d.discount || 0, paid_before: d.doc_type === "Quotation" ? 0 : d.paid_before || 0, items: act === "issue" ? items : d.items, account_id: d.doc_type === "Invoice" ? d.account_id || null : null };
     if (!payload.doc_date) delete payload.doc_date;
     const r = row ? await db.from("documents").update(payload).eq("id", row.id).select("id") : await db.from("documents").insert(payload).select("id");
@@ -916,10 +931,101 @@ function importDialog() {
     } catch (err) { p.innerHTML = `<div class="box" style="border-color:#b42318"><b>Stopped:</b> ${esc(err.message || String(err))}. Records already imported stay; run the import again to continue.</div>`; $("#xgo").disabled = false; } };
   $("#dlg").showModal();
 }
+// ---- v20: quote follow-up, recurring monthly charges, margin while quoting ----------------------
+const plusDays = (s, n) => { const x = new Date((s || iso(new Date())) + "T12:00:00"); x.setDate(x.getDate() + n); return iso(x); };
+const qState = r => r.doc_type !== "Quotation" || docSt(r) !== "Issued" || !r.quote_state ? "" : (r.quote_state === "Sent" && r.valid_until && r.valid_until < iso(new Date()) ? "Expired" : r.quote_state);
+const qTag = r => { const s = qState(r); return s ? ` <span class="tag ${s === "Accepted" ? "ok" : s === "Sent" ? "draft" : "bad"}">${s === "Sent" ? "Open" : s}</span>` : ""; };
+function quoteDialog(r, after) {
+  const f = $("#dlgForm"), cur = r.quote_state || "Sent";
+  f.innerHTML = `<h2>Quotation ${esc(docNo(r))}: where does it stand?</h2><p style="margin-top:0">${esc(r.customer)} · KES ${kes(docTotals(r).total)}</p><div class="grid">
+    <label>Status<select name="st">${[["Sent", "Open (sent, waiting)"], ["Accepted", "Accepted"], ["Lost", "Lost"], ["Expired", "Expired"]].map(([v, l]) => `<option value="${v}" ${v === cur ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    <label>Valid until<input name="vu" type="date" value="${esc(r.valid_until || plusDays(r.doc_date, 30))}"></label>
+    <label id="fuL">Follow up on<input name="fu" type="date" value="${esc(r.follow_up || plusDays(null, 7))}"></label>
+    <label class="full">Note (required if lost: price, no budget, chose someone else…)<input name="note" maxlength="200" value="${esc(r.outcome_note || "")}" autocomplete="off"></label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  const sync = () => { $("#fuL").hidden = f.elements.st.value !== "Sent"; }; sync(); f.onchange = sync; f.oninput = null; f.onclick = null;
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const st = f.elements.st.value;
+    const x = await db.rpc("quote_set_state", { p_id: r.id, p_state: st, p_note: f.elements.note.value.trim() || null, p_follow_up: st === "Sent" ? f.elements.fu.value || null : null, p_valid_until: f.elements.vu.value || null });
+    if (x.error) return toast(x.error.message); $("#dlg").close(); toast("Saved"); after(); };
+  $("#dlg").showModal();
+}
+async function quotesPage() {
+  await loadCompany();
+  const all = (must(await db.from("documents").select("*").eq("doc_type", "Quotation").eq("status", "Issued").order("id", { ascending: false }).limit(2000)) || []).filter(r => r.quote_state);
+  const today = iso(new Date()), ageOf = r => Math.max(0, Math.round((new Date(today) - new Date(r.doc_date || today)) / 864e5));
+  const open = all.filter(r => qState(r) === "Sent").sort((a, b) => String(a.follow_up || "9999").localeCompare(String(b.follow_up || "9999")));
+  const yearAgo = plusDays(today, -365), dec = all.filter(r => (r.issued_at || r.doc_date || "") >= yearAgo), won = dec.filter(r => qState(r) === "Accepted").length, lostN = dec.filter(r => qState(r) === "Lost").length, expN = dec.filter(r => qState(r) === "Expired").length;
+  const rate = won + lostN + expN ? Math.round(100 * won / (won + lostN + expN)) : null, due = open.filter(r => r.follow_up && r.follow_up <= today).length;
+  const val = open.reduce((s, r) => s + docTotals(r).total, 0);
+  let showAll = false;
+  const draw = () => { const list = showAll ? all : open;
+    $("#qtb").innerHTML = list.map((r, i) => `<tr><td><b>${esc(docNo(r))}</b>${qTag(r)}</td><td>${esc(r.customer)}${r.lpo_no ? `<br><small>LPO ${esc(r.lpo_no)}</small>` : ""}</td><td class="n">${kes(docTotals(r).total)}</td><td class="n">${ageOf(r)} d</td><td>${esc(r.valid_until || "")}</td>
+      <td>${qState(r) === "Sent" ? (r.follow_up ? `${r.follow_up <= today ? `<span class="tag bad">${esc(r.follow_up)}</span>` : esc(r.follow_up)}` : "—") : esc(r.outcome_note || "")}</td>
+      <td class="acts">${can("docs.issue") ? `<button class="btn sm" data-qs="${i}">Status</button>` : ""} ${can("docs.add") && qState(r) !== "Accepted" ? `<button class="btn sm ghost" data-cv="${i}">Convert to invoice</button>` : ""} <button class="btn sm pbtn" data-p="${i}">Print</button></td></tr>`).join("") || `<tr><td colspan="7">${showAll ? "No quotations yet." : "No open quotations. Quotations you issue appear here until they are accepted, lost or expire."}</td></tr>`;
+    $("#qtb").onclick = async e => { const b = e.target.closest("button"); if (!b) return; const D = b.dataset, row = k => list[D[k]];
+      if (D.qs) quoteDialog(row("qs"), quotesPage); else if (D.p) printCard("document", row("p"));
+      else if (D.cv) { const x = await db.rpc("doc_convert_quote", { p_id: row("cv").id }); if (x.error) return toast(x.error.message); toast("Draft invoice " + x.data.doc_no + " created. Open it under Quotes / Invoices / Receipts."); quotesPage(); } }; };
+  $("#view").innerHTML = `<h2>Open quotations</h2><div class="cards"><div class="card"><small>Open quotations</small><b>${open.length}</b></div><div class="card"><small>Value waiting</small><b>KES ${kes(val)}</b></div><div class="card"><small>To follow up now</small><b>${due}</b></div><div class="card"><small>Win rate, last 12 months</small><b>${rate == null ? "—" : rate + "%"}</b>${rate == null ? "" : `<small>${won} won · ${lostN} lost · ${expN} expired</small>`}</div></div>
+    <p style="color:var(--mut)">A quotation is <b>open</b> from the day you issue it until you mark it accepted or lost, or its “valid until” date passes (30 days by default). Win rate counts quotations made in this app.</p>
+    <div class="bar"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="qall" style="width:auto"> Show accepted, lost and expired too</label></div>
+    <div class="wrap"><table><thead><tr><th>Quotation</th><th>Customer</th><th>Value (KES)</th><th>Age</th><th>Valid until</th><th>Follow up</th><th></th></tr></thead><tbody id="qtb"></tbody></table></div>`;
+  draw(); $("#qall").onchange = e => { showAll = e.target.checked; draw(); };
+}
+// monthly charges that post themselves to a credit account
+async function recurringDialog() {
+  const accts = accounts.filter(a => a.active), f = $("#dlgForm"), edit = can("accounts.edit");
+  const rows = must(await db.from("recurring_charges").select("*").order("id")) || [], posts = must(await db.from("recurring_posts").select("charge_id")) || [];
+  const n = {}; posts.forEach(p => n[p.charge_id] = (n[p.charge_id] || 0) + 1);
+  f.innerHTML = `<h2>Monthly charges</h2><p style="margin-top:0">Posted to the account by itself on the chosen day each month (internet, maintenance contracts…). They appear on the account statement and in the month-end SMS balance.</p>
+    <table><thead><tr><th>Account</th><th>What</th><th>KES / month</th><th>Day</th><th>From</th><th>Until</th><th></th></tr></thead><tbody>${rows.map(r => `<tr class="${r.active ? "" : "low"}"><td>${esc(acctName(r.account_id))}</td><td>${esc(r.description)}</td><td class="n">${kes(r.amount)}</td><td>${r.day_of_month}</td><td>${esc(r.start_date)}</td><td>${esc(r.end_date || "")}</td>
+      <td>${edit ? `<button type="button" class="btn sm ghost" data-tg="${r.id}">${r.active ? "Switch off" : "Switch on"}</button>${n[r.id] ? "" : ` <button type="button" class="btn sm warn" data-rm="${r.id}">Delete</button>`}` : ""}</td></tr>`).join("") || `<tr><td colspan="7">None yet.</td></tr>`}</tbody></table>
+    ${edit ? `<h3>Add a monthly charge</h3><div class="grid"><label>Account<select name="ac" required><option value=""></option>${accts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label><label>What for<input name="ds" maxlength="160" placeholder="Internet 10 Mbps" required autocomplete="off"></label>
+      <label>Amount per month (KES)<input name="am" type="number" min="1" step="any" required></label><label>Post on day (1 to 28)<input name="dy" type="number" min="1" max="28" value="1" required></label>
+      <label>Starting<input name="sd" type="date" value="${iso(new Date())}" required></label><label>Until (optional)<input name="ed" type="date"></label></div>` : ""}
+    <div class="bar" style="margin-top:14px">${edit ? `<button class="btn" value="add">Add</button>` : ""}<button class="btn ghost" value="cancel" formnovalidate>Close</button></div>`;
+  f.oninput = null; f.onchange = null;
+  f.onclick = async e => { const b = e.target.closest("button[data-tg],button[data-rm]"); if (!b) return;
+    const r = b.dataset.tg ? await db.from("recurring_charges").update({ active: !rows.find(x => String(x.id) === b.dataset.tg).active }).eq("id", Number(b.dataset.tg)) : (confirm("Delete this monthly charge?") ? await db.from("recurring_charges").delete().eq("id", Number(b.dataset.rm)) : null);
+    if (r) { if (r.error) return toast(r.error.message); recurringDialog(); } };
+  f.onsubmit = async e => { if (e.submitter.value !== "add") return; e.preventDefault(); const el = f.elements;
+    const r = await db.from("recurring_charges").insert({ account_id: Number(el.ac.value), description: el.ds.value.trim(), amount: Number(el.am.value), day_of_month: Number(el.dy.value), start_date: el.sd.value, end_date: el.ed.value || null });
+    if (r.error) return toast(r.error.message);
+    const x = await db.rpc("recurring_run", {}); toast(x.error ? "Saved" : x.data.posted ? `Saved. ${x.data.posted} charge(s) posted now.` : "Saved. It will post on the chosen day."); await recurringDialog(); };
+  $("#dlg").showModal();
+}
+// buying costs and expected margin. Kept in their own table, so they can never reach a customer's document.
+async function marginDialog(kind, rec) {
+  const f = $("#dlgForm"), doc = kind === "document", id = rec.id;
+  const m = (await db.from("margin_costs").select("*").eq("kind", kind).eq("ref_id", id)).data, saved = (Array.isArray(m) ? m[0] : m) || {};
+  const sr = await db.from("v_stock").select("description,unit_cost"), stock = ((sr.error ? [] : sr.data) || []).filter(s => s.description);
+  const nk = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, ""), find = desc => { const k = nk(desc); if (k.length < 3) return null; return stock.find(s => nk(s.description) === k) || stock.find(s => nk(s.description).length >= 5 && (k.includes(nk(s.description)) || nk(s.description).includes(k))) || null; };
+  const lines = doc ? (rec.items || []).filter(i => String(i.desc || "").trim()).map((i, n) => { const sv = (saved.lines || [])[n], hit = find(i.desc); return { desc: i.desc, qty: Number(i.qty) || 0, price: Number(i.price) || 0, cost: sv && nk(sv.desc) === nk(i.desc) ? sv.cost : hit && hit.unit_cost != null ? Number(hit.unit_cost) : "", fromStock: !(sv && nk(sv.desc) === nk(i.desc)) && !!(hit && hit.unit_cost != null) }; })
+    : ((saved.lines || []).length ? saved.lines.map(l => ({ ...l })) : [{ desc: "", qty: 1, cost: "" }]);
+  const revenue = () => doc ? lines.reduce((s, l) => s + l.qty * l.price, 0) - Number(rec.discount || 0) : Number(rec.contract_price || 0);
+  const paint = () => { const mat = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.cost) || 0), 0), oth = ["labour", "transport", "lodging"].reduce((s, k) => s + (Number(f.elements[k].value) || 0), 0), rev = revenue(), cost = mat + oth, mg = rev - cost;
+    $("#mgsum").innerHTML = `Selling price <b>KES ${kes(rev)}</b> − costs <b>KES ${kes(cost)}</b> (items ${kes(mat)}, other ${kes(oth)}) = margin <b style="color:${mg < 0 ? "#b42318" : "#067647"}">KES ${kes(mg)}${rev > 0 ? " (" + Math.round(100 * mg / rev) + "%)" : ""}</b>`;
+    const miss = doc ? lines.filter(l => l.cost === "" || l.cost == null).length : 0; $("#mgmiss").textContent = miss ? `${miss} line(s) have no cost yet, so the margin shown is higher than it really is.` : ""; };
+  const draw = () => { f.innerHTML = `<h2>Margin – ${esc(doc ? docNo(rec) : rec.job_no)}</h2><p style="margin-top:0">${esc(doc ? rec.customer : rec.client_name)}. Only people who may see buying costs can open this. It is never printed or sent to the customer.</p>
+    <table><thead><tr><th>Item</th><th>Qty</th>${doc ? "<th>Sells at</th>" : ""}<th>Buying cost each</th><th></th></tr></thead><tbody>${lines.map((l, i) => `<tr><td>${doc ? esc(l.desc) : `<input data-i="${i}" data-k="desc" list="mgdl" value="${esc(l.desc)}" placeholder="Item or material" autocomplete="off">`}</td><td>${doc ? l.qty : `<input data-i="${i}" data-k="qty" type="number" min="0" step="any" value="${l.qty}" style="width:70px">`}</td>${doc ? `<td class="n">${kes(l.price)}</td>` : ""}
+      <td><input data-i="${i}" data-k="cost" type="number" min="0" step="any" value="${l.cost}" style="width:110px">${l.fromStock ? ` <small title="Taken from the stock cost">stock</small>` : ""}</td><td>${doc ? "" : `<button type="button" class="btn sm ghost" data-rm="${i}">✕</button>`}</td></tr>`).join("")}</tbody></table>
+    <datalist id="mgdl">${stock.map(s => `<option value="${esc(s.description)}">`).join("")}</datalist>${doc ? "" : `<button type="button" class="btn sm ghost" id="mgadd">+ line</button>`}
+    <div class="grid" style="margin-top:10px"><label>Labour (KES)<input name="labour" type="number" min="0" step="any" value="${Number(saved.labour || 0)}"></label><label>Transport (KES)<input name="transport" type="number" min="0" step="any" value="${Number(saved.transport || 0)}"></label><label>Food and lodging (KES)<input name="lodging" type="number" min="0" step="any" value="${Number(saved.lodging || 0)}"></label></div>
+    <p id="mgsum" class="box" style="margin:12px 0 4px"></p><p id="mgmiss" style="color:#b54708;margin:0"></p>
+    <div class="bar" style="margin-top:12px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Close</button></div>`; paint(); };
+  draw();
+  f.oninput = e => { const t = e.target; if (t.dataset.k) { const l = lines[t.dataset.i]; l[t.dataset.k] = t.dataset.k === "desc" ? t.value : (t.value === "" ? "" : Number(t.value)); if (t.dataset.k === "desc" && !doc && (l.cost === "" || l.cost == null)) { const h = find(t.value); if (h && h.unit_cost != null) { l.cost = Number(h.unit_cost); const ci = f.querySelector(`[data-i="${t.dataset.i}"][data-k="cost"]`); if (ci) ci.value = l.cost; } } if (t.dataset.k === "cost") l.fromStock = false; } paint(); };
+  f.onchange = null;
+  f.onclick = e => { if (e.target.id === "mgadd") { lines.push({ desc: "", qty: 1, cost: "" }); draw(); } if (e.target.dataset.rm != null && !doc) { lines.splice(e.target.dataset.rm, 1); if (!lines.length) lines.push({ desc: "", qty: 1, cost: "" }); draw(); } };
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const el = f.elements;
+    const r = await db.from("margin_costs").upsert({ kind, ref_id: id, lines: lines.filter(l => doc || String(l.desc || "").trim()).map(l => ({ desc: l.desc, qty: l.qty, cost: l.cost === "" ? null : Number(l.cost) })), labour: Number(el.labour.value) || 0, transport: Number(el.transport.value) || 0, lodging: Number(el.lodging.value) || 0, updated_at: new Date().toISOString() });
+    if (r.error) return toast(r.error.message); $("#dlg").close(); toast("Costs saved"); };
+  $("#dlg").showModal();
+}
 function docPrintHtml(r) {
   const t = docTotals(r), ty = r.doc_type, dn = ty === "Delivery note", cn = ty === "Credit note", st = docSt(r), no = docNo(r) + ((r.revision || 1) > 1 ? " (revision " + r.revision + ")" : "");
   const banner = r._old ? `<p class="box"><b>EARLIER VERSION</b> – replaced by a later revision</p>` : isImp(r) ? `<p class="box"><b>Imported record</b> of the original document ${esc(r.doc_no)}${st === "Void" ? ". Marked void: " + esc(r.void_reason || "") : ""}</p>` : st === "Draft" && "status" in r ? `<p class="box"><b>DRAFT</b> – not issued</p>` : st === "Void" ? `<p class="box"><b>VOID</b>${r.void_reason ? " – " + esc(r.void_reason) : ""}</p>` : "";
   const info = [["Customer", r.customer], ["Customer KRA PIN", r.customer_pin], ["Contact", r.contact], ["Address / site", r.address], ["Reference", r.reference], ["Client LPO / PO no.", r.lpo_no], ["Date", r.doc_date || "undated"],
+    ...(ty === "Quotation" ? [["Valid until", r.valid_until]] : []),
     ...(["Invoice", "Credit note"].includes(ty) ? [["eTIMS invoice no.", r.etims_no], ["eTIMS date", r.etims_date]] : [])].filter(([, v]) => v);
   const rows = dn ? r.items.map(i => `<tr><td>${esc(i.desc)}</td><td>${i.ordered}</td><td>${i.prior}</td><td>${i.delivered}</td><td>${Number(i.ordered) - Number(i.prior) - Number(i.delivered)}</td></tr>`).join("")
     : r.items.map(i => `<tr><td>${esc(i.desc)}</td><td>${i.qty}</td><td>${kes(i.price)}</td><td>${kes(i.qty * i.price)}</td></tr>`).join("");
@@ -1385,7 +1491,7 @@ async function route() {
   if (nv && nv[2] && !can(nv[2]) && !(k === "suppliers")) { $("#view").innerHTML = `<h2>Not allowed</h2><p>Your role (${esc(roleName(me.role))}) does not include this page. Ask the owner if you need it.</p>`; return; }
   const decorate = () => { const h = document.querySelector("#view > h2"); if (h) { const w = document.createElement("div"); w.className = "pagehead"; w.innerHTML = BRAND.icon(k, 22); h.replaceWith(w); w.appendChild(h); } };
   try { if (k === "dashboard") await dashboard(); else if (k === "lists") await listsPage(); else if (k === "docs") await docsPage(); else if (k === "eod") await eodPage(); else if (k === "monthly") await monthlyPage(); else if (k === "summary") await summaryPage();
-    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
+    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
 }
 async function start() {
   const { data: { session } } = await db.auth.getSession();
