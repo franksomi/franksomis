@@ -79,7 +79,7 @@ const T = {
     fields: [["name", "Supplier name", "text", { req: 1 }], ["contact_person", "Contact person", "text"], ["phone", "Phone", "text"], ["location", "Location", "text"], ["supplies", "What they supply", "text", { full: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
 };
 const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
-  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["quotes", "Open quotes", "docs.view"], ["equipment", "Client equipment", "equipment.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
+  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["quotes", "Open quotes", "docs.view"], ["equipment", "Client equipment", "equipment.view"], ["till", "Till payments", "income.add"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
   ["mpay", "M-Pesa checkout", "mpay.use"], ["sms", "SMS messages", "sms.manage"], ["eod", "End of day", "eod.view"], ["monthly", "Monthly report", "reports.view+costs.view"], ["summary", "Year summary", "reports.view+costs.view"],
   ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["payables", "Supplier payables", "payables.view"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["vault", "Company documents", "vault.manage"], ["projects", "Website projects", "projects.manage"], ["policies", "Website policies", "settings.manage"], ["users", "Users & roles", "users.manage"]];
 const navFor = () => NAV.filter(n => !n[2] || can(n[2]));
@@ -178,6 +178,11 @@ async function openForm(key, row) {
     ${key === "sales" && !row ? linesBlock("sales", [], "More items on this sale") : key === "repairs" && (can("repairs.add") || can("repairs.edit")) ? linesBlock("repairs", oldItems, "More parts and items used (as many as you need)") : ""}
     <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
   wireLines(f, key);
+  f.oninput = f.onchange = f.onclick = null;
+  const pasteFix = mpesaPasteFix(f); let billFn = null;
+  if (key === "income" && !row) wireIncomeFill(f);
+  if (key === "repairs" && !row) billFn = await wireRepairBill(f);
+  f.oninput = e => { pasteFix(e); if (billFn) billFn(); };
   f.onsubmit = async e => {
     if (e.submitter.value !== "save") return;
     e.preventDefault();
@@ -265,13 +270,14 @@ async function tablePage(key) {
     const v = r[k]; if (t === "tag") return `<td><span class="tag ${v === "REORDER" || v === "In shop" ? "bad" : "ok"}">${esc(v)}</span></td>`;
     return `<td class="${t === "n" ? "n" : ""}">${t === "n" ? kes(v) : t === "dt" ? esc(String(v || "").replace("T", " ").slice(0, 16)) : t === "yn" ? (v ? "Yes" : "") : t === "acct" ? esc(acctName(v)) : esc(v)}</td>`; }).join("")}
     <td>${pm(def, "edit") ? `<button class="btn sm" data-edit="${i}">Edit</button>` : ""} ${def.print ? `<button class="btn sm pbtn" data-print="${i}">Print card</button>` : ""}
-    ${def.margin && can("costs.view") ? `<button class="btn sm ghost" data-mg="${i}">Margin</button>` : ""}${key === "jobs" && r.status === "Completed" && can("projects.manage") ? `<button class="btn sm ghost" data-wp="${i}">Show on website</button>` : ""}${def.mpay && can("mpay.use") ? `<button class="btn sm" style="background:#12b76a" data-pay="${i}">M-Pesa</button>` : ""}${def.mpay === "repair" ? ` <button class="btn sm wabtn" data-wa="${i}">Send tracking link</button>` : ""}
+    ${def.margin && can("costs.view") ? `<button class="btn sm ghost" data-mg="${i}">Margin</button>` : ""}${((key === "repairs" && ["Ready for collection", "Collected"].includes(r.stage) && Number(r.balance_due) > 0) || (key === "jobs" && r.status === "Completed" && Number(r.balance) > 0)) && can("income.add") ? `<button class="btn sm" style="background:#12b76a" data-pi="${i}">Post income</button>` : ""}${key === "jobs" && r.status === "Completed" && can("projects.manage") ? `<button class="btn sm ghost" data-wp="${i}">Show on website</button>` : ""}${def.mpay && can("mpay.use") ? `<button class="btn sm" style="background:#12b76a" data-pay="${i}">M-Pesa</button>` : ""}${def.mpay === "repair" ? ` <button class="btn sm wabtn" data-wa="${i}">Send tracking link</button>` : ""}
     ${pm(def, "delete") ? `<button class="btn sm warn" data-del="${i}">Delete</button>` : ""}</td></tr>`).join("");
   if (def.quick) await refreshLookups();
   const quickBar = def.quick ? `<div class="bar" id="quick">${catalog.filter(c => c.active).map(c => `<button class="btn sm ghost" data-svc="${esc(c.name)}" title="KES ${c.default_price} per ${esc(c.unit)}">${esc(c.name.split(" (")[0])}</button>`).join("")}</div>` : "";
-  $("#view").innerHTML = `<h2>${esc(def.title)}</h2>${quickBar}<div class="bar">${pm(def, "add") ? `<button class="btn" id="add">+ New</button>` : ""}<input id="q" placeholder="Search…" style="max-width:260px"><span style="color:var(--mut)">${rows.length} rows</span></div>
+  $("#view").innerHTML = `<h2>${esc(def.title)}</h2>${quickBar}<div class="bar">${pm(def, "add") ? `<button class="btn" id="add">+ New</button>` : ""}${key === "income" && can("income.add") ? `<button class="btn ghost" id="addsplit">+ From a repair or job (cash + M-Pesa)</button>` : ""}<input id="q" placeholder="Search…" style="max-width:260px"><span style="color:var(--mut)">${rows.length} rows</span></div>
     <div class="wrap"><table><thead><tr>${head}</tr></thead><tbody id="tb">${body || `<tr><td colspan="99"><div class="empty">${BRAND.emptyArt(130)}Nothing yet. Press “+ New”.</div></td></tr>`}</tbody></table></div>`;
   if ($("#add")) $("#add").onclick = () => openForm(key);
+  if ($("#addsplit")) $("#addsplit").onclick = () => postIncomeDialog({});
   const qk = $("#quick"); if (qk) qk.onclick = async e => { const b = e.target.closest("[data-svc]"); if (!b) return; await openForm(key); const sel = $("#dlgForm").elements.service; sel.value = b.dataset.svc; sel.onchange(); $("#dlgForm").elements.qty.value = 1; };
   $("#q").oninput = e => { const s = e.target.value.toLowerCase(); document.querySelectorAll("#tb tr").forEach(tr => tr.hidden = !tr.textContent.toLowerCase().includes(s)); };
   $("#tb").onclick = async e => {
@@ -281,6 +287,7 @@ async function tablePage(key) {
     if (b.dataset.print) { let r = rows[b.dataset.print]; if (def.print === "jobcard") r = { ...r, ...(await repairChecks(r.id)), items: await repairItems(r.id) }; printCard(def.print, r); }
     if (b.dataset.mg) marginDialog("field_job", rows[b.dataset.mg]);
     if (b.dataset.wp) projectDialog(rows[b.dataset.wp], null);
+    if (b.dataset.pi) { const r = rows[b.dataset.pi]; postIncomeDialog({ ref: key === "repairs" ? "JC-" + String(r.id).padStart(4, "0") : r.job_no }); }
     if (b.dataset.pay) { const r = rows[b.dataset.pay]; mpayDialog(def.mpay === "repair"
       ? { phone: r.contact, amount: Math.max(0, Math.floor(r.balance_due || 0)) || "", ref: "JC-" + String(r.id).padStart(4, "0"), purpose: "Repair payment", auto: true, name: r.customer_name }
       : { phone: r.contact, amount: Math.max(0, Math.floor(r.balance || 0)) || "", ref: r.job_no, purpose: "Job payment " + r.job_no, auto: true, name: r.client_name }); }
@@ -413,6 +420,7 @@ async function dashboard() {
   add(d.enquiries_new, "new website enquiry(ies)", "enquiries", "enquiries");
   add(d.chat_waiting, "live chat(s) waiting", "chat", "chat");
   if (ex.quotes) add(ex.quotes.due, "quotation(s) to follow up", "quotes", "docs");
+  add(ex.till_pending, "customer payment(s) to the till waiting for you to confirm", "till", "income");
   add(ex.warranty_soon, "equipment warranty(ies) ending within 30 days", "equipment", "equipment");
   if (ex.vault) { add(ex.vault.expired, "company document(s) expired", "vault", "vault"); add(ex.vault.expiring, "company document(s) expiring within 30 days", "vault", "vault"); }
   add(ex.etims_missing, "issued invoice(s) / credit note(s) missing an eTIMS number", "docs", "docs");
@@ -1081,6 +1089,95 @@ async function policiesPage() {
   $("#view").onsubmit = async e => { e.preventDefault(); const f = e.target.closest("form"), r = rows[f.dataset.i]; const x = await db.from("site_policies").update({ title: f.elements.title.value, body: f.elements.body.value }).eq("slug", r.slug); if (x.error) return toast(x.error.message); toast("Saved. It is live on the website now."); };
 }
 
+// ---- v22: post income from a finished repair / job (cash + M-Pesa), autofill, and payments to the till ------------------------------
+const TILL_NO = "643844";
+function parseMpesa(t) {
+  const m = String(t || ""), up = m.toUpperCase(); let code = null;
+  for (const x of up.matchAll(/(?:^|[^A-Z0-9])([A-Z][A-Z0-9]{9})(?=[^A-Z0-9]|$)/g)) if (/[0-9]/.test(x[1])) { code = x[1]; break; }
+  const a = m.match(/ksh\.?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i);
+  return { code, amount: a ? Number(a[1].replace(/,/g, "")) : null };
+}
+// finds a repair (JC-0012) or a field job (J-004) and says what is owed on it
+async function lookupRef(ref) {
+  const r = String(ref || "").toUpperCase().replace(/\s+/g, "");
+  if (/^JC-?\d+$/.test(r)) { const id = Number(r.replace(/\D/g, "")); const x = await db.from("v_repairs").select("*").eq("id", id); const row = Array.isArray(x.data) ? x.data[0] : x.data; if (!row) return null;
+    return { ref: "JC-" + String(id).padStart(4, "0"), who: row.customer_name, contact: row.contact, due: Number(row.balance_due) || 0, type: "Repair", stage: row.stage, desc: "Repair JC-" + String(id).padStart(4, "0") + ": " + (row.brand_model || row.item_type || "device") }; }
+  if (/^J-?\d+$/.test(r)) { const n = "J-" + String(Number(r.replace(/\D/g, ""))).padStart(3, "0"); const x = await db.from("v_jobs").select("*").eq("job_no", n); const row = Array.isArray(x.data) ? x.data[0] : x.data; if (!row) return null;
+    const jt = row.job_type || ""; return { ref: n, who: row.client_name, contact: row.contact, due: Math.max(Number(row.balance) || 0, 0), type: jt === "CCTV installation" ? "CCTV installation" : /^Electrical/.test(jt) ? "Electrical installation" : "Other service", stage: row.status, desc: "Job " + n + ": " + (jt || "field job") + " for " + row.client_name }; }
+  return null;
+}
+async function postIncomeDialog(init) {
+  const f = $("#dlgForm"); let cur = init && init.ref ? await lookupRef(init.ref) : null;
+  f.oninput = f.onchange = f.onclick = null;
+  f.innerHTML = `<h2>Post income from a repair or job</h2><p style="margin-top:0;color:var(--mut)">Records what the customer paid for one repair or field job. If they paid part in cash and part by M-Pesa, enter both amounts and both lines are saved together.</p>
+    <div class="grid"><label class="full">Repair or job number<input name="ref" value="${esc(init?.ref || "")}" placeholder="JC-0012 or J-004" autocomplete="off" required></label>
+    <div class="full box" id="pi_info" style="margin:0"></div>
+    <label>Date<input name="date" type="date" value="${iso(new Date())}"></label><label>Note (optional)<input name="note" autocomplete="off"></label>
+    <label>Paid in cash (KES)<input name="cash" type="number" step="0.01" min="0" inputmode="decimal"></label><label>Paid by M-Pesa (KES)<input name="mpesa" type="number" step="0.01" min="0" inputmode="decimal"></label>
+    <label class="full">M-Pesa code (or paste the whole M-Pesa message here)<input name="code" autocomplete="off" placeholder="SGH7K2L9XQ"></label>
+    <div class="full"><button type="button" class="btn sm ghost" id="pi_cash">All cash</button> <button type="button" class="btn sm ghost" id="pi_mp">All M-Pesa</button> <span id="pi_left" style="margin-left:8px"></span></div></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Post income</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  const el = f.elements, num = n => Number(el[n].value) || 0;
+  const info = () => { $("#pi_info").innerHTML = cur ? `<b>${esc(cur.ref)}</b> · ${esc(cur.who)}${cur.contact ? " · " + esc(cur.contact) : ""}<br>${esc(cur.stage || "")} · balance due <b>KES ${kes(cur.due)}</b>${["Ready for collection", "Collected", "Completed"].includes(cur.stage) ? "" : `<br><span class="tag bad">Not finished yet</span> You can still post a payment received now.`}` : `<span style="color:var(--mut)">Type a repair or job number to see what is owed.</span>`; left(); };
+  const left = () => { const t = num("cash") + num("mpesa"), d = cur ? cur.due - t : null; $("#pi_left").innerHTML = cur ? (d < 0 ? `<span class="tag bad">KES ${kes(-d)} more than the balance</span>` : `Left to pay after this: <b>KES ${kes(d)}</b>`) : ""; };
+  const find = async () => { cur = await lookupRef(el.ref.value); if (cur && el.ref.value.trim() !== cur.ref) el.ref.value = cur.ref; info(); if (cur && !num("cash") && !num("mpesa") && cur.due > 0) el.cash.value = cur.due; left(); };
+  info(); if (cur && cur.due > 0) { el.cash.value = cur.due; left(); }
+  f.onchange = e => { if (e.target.name === "ref") find(); };
+  f.oninput = e => { if (e.target.name === "code" && e.target.value.length > 14) { const p = parseMpesa(e.target.value); if (p.code) { e.target.value = p.code; if (p.amount && !num("mpesa")) { el.mpesa.value = p.amount; if (num("cash") === (cur ? cur.due : -1)) el.cash.value = Math.max((cur ? cur.due : 0) - p.amount, 0) || ""; } } } left(); };
+  f.onclick = e => { if (e.target.id === "pi_cash") { el.cash.value = cur ? cur.due : ""; el.mpesa.value = ""; left(); } if (e.target.id === "pi_mp") { el.mpesa.value = cur ? cur.due : ""; el.cash.value = ""; left(); } };
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault();
+    if (!cur) { await find(); if (!cur) return toast("There is no repair or job with that number."); }
+    const cash = num("cash"), mp = num("mpesa"); if (cash + mp <= 0) return toast("Enter the cash amount, the M-Pesa amount, or both.");
+    if (mp > 0 && !el.code.value.trim()) return toast("Type the M-Pesa code for the M-Pesa part.");
+    const x = await db.rpc("post_job_income", { p_ref: cur.ref, p_cash: cash || 0, p_mpesa: mp || 0, p_mpesa_ref: el.code.value.trim() || null, p_date: el.date.value || null, p_note: el.note.value.trim() || null });
+    if (x.error) return toast(x.error.message);
+    $("#dlg").close(); toast("Posted KES " + kes(cash + mp) + " to " + cur.ref + (x.data && Number(x.data.balance_after) > 0 ? ". Balance left KES " + kes(x.data.balance_after) : ". Fully paid.")); route(); };
+  $("#dlg").showModal();
+}
+// typing a repair / job number in the ordinary Income form fills the rest in
+function wireIncomeFill(f) {
+  f.onchange = async e => { if (e.target.name !== "ref" || !f.elements.description || !f.elements.income_type) return; const c = await lookupRef(e.target.value); if (!c) return;
+    e.target.value = c.ref; if (!f.elements.description.value.trim()) f.elements.description.value = c.desc; if (!Number(f.elements.amount.value) && c.due > 0) f.elements.amount.value = c.due; f.elements.income_type.value = c.type;
+    let h = f.querySelector("#refhint"); if (!h) { e.target.parentElement.insertAdjacentHTML("beforeend", `<small id="refhint" style="display:block;color:var(--mut);font-weight:400"></small>`); h = f.querySelector("#refhint"); }
+    h.textContent = c.who + " · balance due KES " + kes(c.due); };
+}
+// pasting a whole M-Pesa message into any "M-Pesa code" box keeps just the code (and fills an empty amount)
+function mpesaPasteFix(f) {
+  return e => { const n = e.target.name; if ((n !== "mpesa_ref" && n !== "deposit_mpesa_ref") || e.target.value.length < 15) return; const p = parseMpesa(e.target.value); if (!p.code) return; e.target.value = p.code;
+    if (n === "mpesa_ref" && p.amount && f.elements.amount && !Number(f.elements.amount.value)) f.elements.amount.value = p.amount; if (n === "deposit_mpesa_ref" && p.amount && f.elements.deposit_received && !Number(f.elements.deposit_received.value)) f.elements.deposit_received.value = p.amount; };
+}
+// new repair: show what the parts cost the customer (and what they cost you) from the stock list as you pick them
+let costMap = null;
+async function wireRepairBill(f) {
+  if (can("costs.view") && !costMap) { const r = await db.from("item_costs").select("item_id,unit_cost"); costMap = {}; ((r && r.data) || []).forEach(x => { costMap[x.item_id] = Number(x.unit_cost) || 0; }); }
+  f.querySelector(".bar").insertAdjacentHTML("beforebegin", `<p class="box" id="bill" style="margin:10px 0 0"></p>`);
+  const stock = id => stockItems.find(s => String(s.id) === String(id));
+  const bill = () => { if (!f.querySelector("#bill")) return; const g = n => f.elements[n]; let sell = 0, buy = 0, warn = "";
+    for (const n of [1, 2]) { const id = g("part" + n + "_id") && g("part" + n + "_id").value; if (!id) continue; const s = stock(id) || {}, q = (g("part" + n + "_qty") && Number(g("part" + n + "_qty").value)) || 1; sell += (Number(s.selling_price) || 0) * q; buy += (costMap ? costMap[id] || 0 : 0) * q; if (q > Number(s.on_hand)) warn += `<br><span class="tag bad">Only ${s.on_hand} of ${esc(s.description)} in stock</span>`; }
+    f.querySelectorAll("#xlines [data-line]").forEach(l => { const q = Number(l.querySelector("[name=li_qty]").value) || 0, p = Number(l.querySelector("[name=li_price]").value) || 0, it = l.querySelector("[name=li_item]").value; sell += q * p; if (it && costMap) buy += (costMap[it] || 0) * q; });
+    const lab = (g("labor_cost") && Number(g("labor_cost").value)) || 0, tot = sell + lab;
+    f.querySelector("#bill").innerHTML = `Parts and items <b>KES ${kes(sell)}</b> + labour <b>KES ${kes(lab)}</b> = estimated bill <b>KES ${kes(tot)}</b>` + (costMap ? `<br><small>Buying cost of the stocked parts KES ${kes(buy)} · profit about KES ${kes(tot - buy)}</small>` : "") + warn; };
+  f.onchange = e => { const m = /^part([12])_id$/.exec(e.target.name || ""); if (m && e.target.value) { const q = f.elements["part" + m[1] + "_qty"]; if (q && !Number(q.value)) q.value = 1; } bill(); };
+  bill(); return bill;
+}
+// ---- customer payments to the till, waiting for you to confirm
+async function tillPage() {
+  const rows = must(await db.from("v_till_claims").select("*").order("id", { ascending: false }).limit(300)) || [];
+  const pend = rows.filter(r => r.status === "Pending"), done = rows.filter(r => r.status !== "Pending");
+  const kind = { repair: "Repair", job: "Field job", order: "Shop order", account: "Credit account" };
+  const line = r => `<tr><td>${esc(String(r.created_at || "").replace("T", " ").slice(0, 16))}</td><td><b>${esc(r.ref)}</b><br><small>${esc(kind[r.kind] || "")} · ${esc(r.customer || "")}</small></td><td><b>${esc(r.receipt)}</b></td><td class="n">${kes(r.amount)}</td><td class="n">${kes(r.balance_due)}</td>
+    <td>${r.stmt_amount != null ? (Number(r.stmt_amount) === Number(r.amount) ? `<span class="tag ok">On your till statement</span>` : `<span class="tag bad">On statement as KES ${kes(r.stmt_amount)}</span>`) : `<span class="tag draft">Not on the statement yet</span>`}${r.warning ? `<br><small style="color:#b54708">${esc(r.warning)}</small>` : ""}</td>
+    <td><small>${esc(r.message)}</small></td><td class="acts">${r.status === "Pending" ? `<button class="btn sm" data-c="${r.id}">Confirm</button> <button class="btn sm warn" data-r="${r.id}">Reject</button>` : `<span class="tag ${r.status === "Confirmed" ? "ok" : "bad"}">${esc(r.status)}</span>${r.note ? `<br><small>${esc(r.note)}</small>` : ""}`}</td></tr>`;
+  const tbl = (rs, empty) => `<div class="wrap"><table><thead><tr><th>Received</th><th>For</th><th>M-Pesa code</th><th>Amount</th><th>Owed now</th><th>Check</th><th>Message pasted</th><th></th></tr></thead><tbody>${rs.map(line).join("") || `<tr><td colspan="8">${empty}</td></tr>`}</tbody></table></div>`;
+  $("#view").innerHTML = `<h2>Payments to the till</h2><p style="color:var(--mut);margin-top:0">When a customer's payment prompt does not work they pay till <b>${TILL_NO}</b> and paste the M-Pesa message on the website. Check each one against your M-Pesa statement (import it under M-Pesa reconcile; tills linked to Kopo Kopo appear by themselves), then press <b>Confirm</b>. Only then is it added to your income, linked to the job, with the M-Pesa code.</p>
+    <h3>Waiting for you <span class="tag">${pend.length}</span></h3>${tbl(pend, "Nothing waiting.")}<h3>Decided</h3>${tbl(done.slice(0, 60), "None yet.")}`;
+  $("#view").onclick = async e => { const b = e.target.closest("button"); if (!b) return; const id = Number(b.dataset.c || b.dataset.r), r = rows.find(x => x.id === id); if (!r) return;
+    if (b.dataset.c) { if (r.stmt_amount == null && !confirm("This code is not on a till statement you have imported yet. Confirm anyway?")) return; if (!confirm(`Add KES ${kes(r.amount)} (${r.receipt}) to ${r.ref}?`)) return;
+      const x = await db.rpc("till_decide", { p_id: id, p_action: "confirm" }); if (x.error) return toast(x.error.message); toast("Confirmed and posted to " + r.ref); tillPage(); }
+    else { const f = $("#dlgForm"); f.oninput = f.onchange = f.onclick = null; f.innerHTML = `<h2>Reject ${esc(r.receipt)}</h2><label>Why? (kept on record)<input name="why" required autocomplete="off" placeholder="Not on the till statement"></label><div class="bar" style="margin-top:14px"><button class="btn warn" value="save">Reject</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+      f.onsubmit = async ev => { if (ev.submitter.value !== "save") return; ev.preventDefault(); const x = await db.rpc("till_decide", { p_id: id, p_action: "reject", p_note: f.elements.why.value }); if (x.error) return toast(x.error.message); $("#dlg").close(); toast("Rejected"); tillPage(); }; $("#dlg").showModal(); } };
+}
+
 async function quotesPage() {
   await loadCompany();
   const all = (must(await db.from("documents").select("*").eq("doc_type", "Quotation").eq("status", "Issued").order("id", { ascending: false }).limit(2000)) || []).filter(r => r.quote_state);
@@ -1623,7 +1720,7 @@ async function route() {
   if (nv && nv[2] && !can(nv[2]) && !(k === "suppliers")) { $("#view").innerHTML = `<h2>Not allowed</h2><p>Your role (${esc(roleName(me.role))}) does not include this page. Ask the owner if you need it.</p>`; return; }
   const decorate = () => { const h = document.querySelector("#view > h2"); if (h) { const w = document.createElement("div"); w.className = "pagehead"; w.innerHTML = BRAND.icon(k, 22); h.replaceWith(w); w.appendChild(h); } };
   try { if (k === "dashboard") await dashboard(); else if (k === "lists") await listsPage(); else if (k === "docs") await docsPage(); else if (k === "eod") await eodPage(); else if (k === "monthly") await monthlyPage(); else if (k === "summary") await summaryPage();
-    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "equipment") await equipmentPage(); else if (k === "vault") await vaultPage(); else if (k === "projects") await projectsPage(); else if (k === "policies") await policiesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
+    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "equipment") await equipmentPage(); else if (k === "till") await tillPage(); else if (k === "vault") await vaultPage(); else if (k === "projects") await projectsPage(); else if (k === "policies") await policiesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
 }
 async function start() {
   const { data: { session } } = await db.auth.getSession();

@@ -12,7 +12,7 @@
   <div id="out" hidden></div>
 </main>
 <div id="siteFooter"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script><script src="till.js"></script>
 <script>
 (function(){
   var E=WEB.esc,K=WEB.kes,$=WEB.$;WEB.chrome("track.html");var cur=null;
@@ -33,9 +33,10 @@
       '<div class="sumrow"><span>Items</span><span>'+K(o.subtotal)+'</span></div><div class="sumrow"><span>'+(o.fulfil==="pickup"?"Pickup at the shop":"Delivery · "+E(o.zone))+'</span><span>'+(Number(o.delivery_fee)?K(o.delivery_fee):"Free")+'</span></div>'+
       '<div class="sumrow t"><span>Total</span><span>'+K(o.total)+'</span></div><div class="sumrow"><span>Paid so far</span><span>'+K(o.paid)+'</span></div><div class="sumrow"><span>Balance</span><b id="bal">'+K(due)+'</b></div>'+
       (o.fulfil==="delivery"&&o.address?'<p style="margin:12px 0 0;color:var(--mut)"><b>Delivering to:</b> '+E(o.address)+'</p>':"")+
-      (canPay?'<div class="noprint" style="margin-top:14px"><button class="btn green" id="pay" type="button">Pay '+K(due)+' with M-Pesa now</button><p class="msg" id="pm" role="status"></p><small style="color:var(--mut)">A prompt goes to the phone number on the order. Or pay when your order arrives.</small></div>':due<=0&&!cancelled?'<p class="msg ok" style="margin-top:12px">Fully paid. Thank you!</p>':"")+'</div>'+
+      (canPay?'<div class="noprint" style="margin-top:14px"><button class="btn green" id="pay" type="button">Pay '+K(due)+' with M-Pesa now</button><p class="msg" id="pm" role="status"></p><small style="color:var(--mut)">A prompt goes to the phone number on the order. Or pay when your order arrives.</small></div><div id="tillbox"></div>':due<=0&&!cancelled?'<p class="msg ok" style="margin-top:12px">Fully paid. Thank you!</p>':"")+'</div>'+
       '<p class="noprint center" style="margin-top:16px"><button class="btn sm line" style="color:var(--txt)" onclick="print()" type="button">Print</button> <a class="btn sm green" target="_blank" rel="noopener" href="'+WEB.waLink("Hello Franksomi, about my order "+o.order_no+": ")+'">Ask about this order</a></p>';
     $("#out").hidden=false;
+    if(window.FKTill&&$("#tillbox"))FKTill.mount($("#tillbox"),{db:WEB.db,ref:function(){return cur.no},phone:function(){return cur.phone},done:null});
     var pay=$("#pay");if(pay)pay.onclick=async function(){pay.disabled=true;var m=$("#pm");var r=await WEB.payOrder(cur.no,cur.phone,due,function(t){m.className="msg";m.textContent=t});
       if(r.ok){m.className="msg ok";m.textContent=r.review?"We received your payment and will confirm it shortly.":"Payment received. Thank you!";setTimeout(function(){lookup(cur.no,cur.phone,true)},1500)}else{m.className="msg bad";m.textContent=r.message;pay.disabled=false}};
   }

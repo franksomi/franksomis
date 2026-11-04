@@ -16,14 +16,14 @@
 <section id="acct" hidden>
   <div class="split" style="align-items:start"><div><h2 id="an" style="margin:0 0 4px"></h2><p id="ad" style="color:var(--mut);margin:0"></p></div>
   <div class="card" style="text-align:center"><span class="kicker">Balance owed</span><div id="bal" style="font:800 2rem var(--head)"></div><div id="lim" style="color:var(--mut);font-size:.88rem"></div>
-    <div id="payb" style="margin-top:12px"><label>Amount to pay now (KES)<input id="amt" type="number" min="1" step="1" inputmode="numeric"></label><button class="btn" id="pay" type="button">Pay by M-Pesa</button><p class="msg" id="pm" role="status"></p></div></div></div>
+    <div id="payb" style="margin-top:12px"><label>Amount to pay now (KES)<input id="amt" type="number" min="1" step="1" inputmode="numeric"></label><button class="btn" id="pay" type="button">Pay by M-Pesa</button><p class="msg" id="pm" role="status"></p><div id="tillbox"></div></div></div></div>
   <h3 style="margin-top:34px">Invoices and credit notes</h3><div class="wrap-t" style="overflow:auto"><table id="inv"><thead><tr><th>Number</th><th>Date</th><th>Type</th><th>eTIMS no.</th><th>LPO</th><th style="text-align:right">Total (KES)</th><th></th></tr></thead><tbody></tbody></table></div>
   <h3 style="margin-top:34px">Statement <small id="per" style="color:var(--mut);font-weight:400"></small></h3><div style="overflow:auto"><table id="st"><thead><tr><th>Date</th><th>Details</th><th style="text-align:right">Charges</th><th style="text-align:right">Payments</th><th style="text-align:right">Balance</th></tr></thead><tbody></tbody></table></div>
   <p style="margin-top:20px"><button class="btn line" id="prst" type="button" style="color:var(--txt)">Print / save statement</button> <button class="btn line" id="out" type="button" style="color:var(--txt)">Sign out</button></p>
 </section>
 </main>
 <div id="siteFooter"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script><script src="till.js"></script>
 <script>(function(){WEB.chrome("account.html");
 var esc=WEB.esc,kes=WEB.kes,$=function(s){return document.querySelector(s)},cur=null,D=null;
 var n2=function(v){return Number(v||0).toLocaleString("en-KE",{minimumFractionDigits:2,maximumFractionDigits:2})};
@@ -38,7 +38,7 @@ function stHtml(){var a=D.account,rows=D.lines.map(function(l){var v=Number(l.am
   return shell("ACCOUNT STATEMENT",a.acc_no,'<table><tr><th style="width:30%">Account</th><td>'+esc(a.name)+'</td></tr><tr><th>Period</th><td>'+esc(D.from)+' to '+esc(D.to)+'</td></tr></table><table style="margin-top:10px"><thead><tr><th>Date</th><th>Details</th><th>Charges</th><th>Payments</th><th>Balance (KES)</th></tr></thead><tbody><tr><td></td><td>Balance brought forward</td><td></td><td></td><td align="right">'+n2(D.opening)+'</td></tr>'+rows+'<tr><th colspan="4" align="right">BALANCE OWED (KES)</th><th align="right">'+n2(a.balance)+'</th></tr></tbody></table>')}
 function show(d){D=d;var a=d.account;$("#signin").hidden=true;$("#acct").hidden=false;$("#an").textContent=a.name;$("#ad").textContent=[a.acc_no,a.contact,a.address].filter(Boolean).join(" · ");
   var b=Number(a.balance);$("#bal").textContent="KES "+n2(b);$("#lim").textContent=Number(a.credit_limit)>0?"Credit limit KES "+n2(a.credit_limit):"";
-  $("#payb").hidden=!(b>0);$("#amt").value=b>0?Math.floor(b):"";$("#amt").max=Math.floor(b);
+  $("#payb").hidden=!(b>0);if(window.FKTill)FKTill.mount($("#tillbox"),{db:WEB.db,ref:function(){return D.account.acc_no},phone:function(){return cur.phone}});$("#amt").value=b>0?Math.floor(b):"";$("#amt").max=Math.floor(b);
   $("#inv tbody").innerHTML=(d.invoices||[]).map(function(x,i){return '<tr><td><b>'+esc(x.doc_no)+'</b></td><td>'+esc(x.doc_date||"")+'</td><td>'+esc(x.doc_type)+'</td><td>'+esc(x.etims_no||"")+'</td><td>'+esc(x.lpo_no||"")+'</td><td align="right">'+n2(x.total)+'</td><td><button class="btn sm line" style="color:var(--txt)" data-i="'+i+'" type="button">Print / PDF</button></td></tr>'}).join("")||'<tr><td colspan="7">No invoices yet.</td></tr>';
   $("#per").textContent="("+d.from+" to "+d.to+")";
   $("#st tbody").innerHTML='<tr><td></td><td>Balance brought forward</td><td></td><td></td><td align="right">'+n2(d.opening)+'</td></tr>'+(d.lines||[]).map(function(l){var v=Number(l.amount);return '<tr><td>'+esc(l.date)+'</td><td>'+esc([l.kind,l.ref,l.description].filter(Boolean).join(" · "))+'</td><td align="right">'+(v>0?n2(v):'')+'</td><td align="right">'+(v<0?n2(-v):'')+'</td><td align="right">'+n2(l.balance)+'</td></tr>'}).join("");window.scrollTo(0,0)}
