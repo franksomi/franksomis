@@ -61,7 +61,7 @@ const T = {
   income: { title: "Income", view: "income", perm: "income", table: "income", order: "received_on",
     cols: [["received_on", "Date"], ["ref", "Customer ID / Job No."], ["description", "Description"], ["amount", "Amount", "n"], ["payment", "Payment"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"], ["income_type", "Type"]],
     fields: [["received_on", "Date", "date", { today: 1 }], ["ref", "Customer ID / Job No.", "text"], ["description", "Service description", "text", { full: 1 }], ["amount", "Amount (KES)", "number", { req: 1 }],
-      ["payment", "Payment method", "select:" + PAYX.join()], ["account_id", "Credit account (choose when payment is On account)", "account"], ["income_type", "Income type", "select:Repair,Electrical installation,CCTV installation,Other service"], ["mpesa_ref", "M-Pesa code", "text"], ["notes", "Notes", "text", { full: 1 }]] },
+      ["payment", "Payment method", "select:" + PAYX.join()], ["account_id", "Credit account (choose when payment is On account)", "account"], ["income_type", "Income type", "select:Repair,Electrical installation,CCTV installation,Other service,Landlord WiFi"], ["mpesa_ref", "M-Pesa code", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   expenses: { title: "Expenses", view: "expenses", perm: "expenses", table: "expenses", order: "spent_on",
     cols: [["spent_on", "Date"], ["description", "Description"], ["category", "Category"], ["amount", "Amount", "n"], ["payment", "Payment"], ["mpesa_ref", "M-Pesa code"], ["job_no", "Job No."]],
     fields: [["spent_on", "Date", "date", { today: 1 }], ["description", "Description", "text", { full: 1 }], ["category", "Category", "select:Job materials,Labor / Technician,Transport / Logistics,Fuel,Rent,Utilities,Stock purchase,Airtime / Internet,Other"],
@@ -79,7 +79,7 @@ const T = {
     fields: [["name", "Supplier name", "text", { req: 1 }], ["contact_person", "Contact person", "text"], ["phone", "Phone", "text"], ["location", "Location", "text"], ["supplies", "What they supply", "text", { full: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
 };
 const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
-  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["quotes", "Open quotes", "docs.view"], ["equipment", "Client equipment", "equipment.view"], ["till", "Till payments", "income.add"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
+  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["quotes", "Open quotes", "docs.view"], ["equipment", "Client equipment", "equipment.view"], ["till", "Till payments", "income.add"], ["wifi", "Landlord WiFi", "reports.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
   ["mpay", "M-Pesa checkout", "mpay.use"], ["sms", "SMS messages", "sms.manage"], ["eod", "End of day", "eod.view"], ["monthly", "Monthly report", "reports.view+costs.view"], ["summary", "Year summary", "reports.view+costs.view"],
   ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["payables", "Supplier payables", "payables.view"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["vault", "Company documents", "vault.manage"], ["projects", "Website projects", "projects.manage"], ["policies", "Website policies", "settings.manage"], ["users", "Users & roles", "users.manage"]];
 const navFor = () => NAV.filter(n => !n[2] || can(n[2]));
@@ -442,6 +442,7 @@ async function dashboard() {
       ${src && src.length ? `<div class="panel"><h3>Where income comes from (${yr})</h3>${BRAND.donut(src, "Income")}</div>` : ""}${sm ? `<div class="panel"><h3>Money received by payment method (${yr})</h3>${BRAND.donut(pay, "Received")}</div>` : ""}
       ${ex.expense_cats ? `<div class="panel"><h3>Where the money goes (${yr})</h3>${hbars(ex.expense_cats.map(x => ({ l: x.category, v: x.amount })), "#ff914d")}</div>` : ""}
       ${ex.quotes && (Number(ex.quotes.open) || ex.quotes.rate != null) ? `<div class="panel"><h3>Quotations</h3><p style="margin:0 0 6px"><b>${ex.quotes.open}</b> open, worth <b>KES ${kes(ex.quotes.open_value)}</b></p><p style="margin:0">Win rate, last 12 months: <b>${ex.quotes.rate == null ? "not enough yet" : ex.quotes.rate + "%"}</b>${ex.quotes.rate == null ? "" : ` <small style="color:var(--mut)">(${ex.quotes.won} won · ${ex.quotes.lost} lost · ${ex.quotes.expired} expired)</small>`}</p><p style="margin:8px 0 0"><a href="#quotes">Open quotations</a></p></div>` : ""}
+      ${ex.wifi && (Number(ex.wifi.this_month) || Number(ex.wifi.last_month)) ? `<div class="panel"><h3>Landlord WiFi</h3><p style="margin:0 0 6px">This month <b>KES ${kes(ex.wifi.this_month)}</b> · ${fmtBytes(ex.wifi.bytes_this)}</p><p style="margin:0">Last month <b>KES ${kes(ex.wifi.last_month)}</b> · ${fmtBytes(ex.wifi.bytes_last)}</p><p style="margin:8px 0 0"><small style="color:var(--mut)">Figures up to ${esc(ex.wifi.last_day || "")}</small> · <a href="#wifi">Landlord WiFi</a></p></div>` : ""}
       ${ex.top_items ? `<div class="panel"><h3>Best sellers, last 30 days</h3>${hbars(ex.top_items.map(x => ({ l: x.item, v: x.sales, t: "KES " + kes(x.sales) })), "#12b76a")}</div>` : ""}
       ${ex.jobs_stage && ex.jobs_stage.length ? `<div class="panel"><h3>Field jobs, by stage</h3>${hbars(ex.jobs_stage.map(x => ({ l: x.stage, v: x.n, t: String(x.n) })))}</div>` : ""}
       ${ex.orders_stage && ex.orders_stage.length ? `<div class="panel"><h3>Online orders still open, by stage</h3>${hbars(ex.orders_stage.map(x => ({ l: x.stage, v: x.n, t: String(x.n) })), "#7a5af8")}</div>` : ""}
@@ -1178,6 +1179,53 @@ async function tillPage() {
       f.onsubmit = async ev => { if (ev.submitter.value !== "save") return; ev.preventDefault(); const x = await db.rpc("till_decide", { p_id: id, p_action: "reject", p_note: f.elements.why.value }); if (x.error) return toast(x.error.message); $("#dlg").close(); toast("Rejected"); tillPage(); }; $("#dlg").showModal(); } };
 }
 
+// ---- v23: Landlord WiFi (Centipid) revenue --------------------------------------------------------------------------------------
+function csvLine(l) { const out = []; let cur = "", q = false; for (let i = 0; i < l.length; i++) { const c = l[i]; if (q) { if (c === '"') { if (l[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; } else if (c === '"') q = true; else if (c === ",") { out.push(cur); cur = ""; } else cur += c; } out.push(cur); return out; }
+// reads a Centipid analytics report: returns { period, days: {date: {revenue, bytes}}, methods, name }
+function parseCentipid(text, name) {
+  const lines = String(text || "").replace(/^﻿/, "").split(/\r?\n/).map(csvLine);
+  if (!lines.length || !/centipid/i.test(lines[0][0] || "")) throw new Error(name + " is not a Centipid analytics report.");
+  const out = { name, period: "", days: {}, methods: [] }, sect = t => lines.findIndex(r => (r[0] || "").trim().toLowerCase() === t);
+  const per = lines.find(r => (r[0] || "").trim() === "Period"); out.period = per ? per[1] : "";
+  const read = (title, fn) => { const i = sect(title); if (i < 0) return 0; let n = 0; for (let j = i + 2; j < lines.length && (lines[j][0] || "").trim() !== ""; j++) { fn(lines[j]); n++; } return n; };
+  const dayOk = d => /^\d{4}-\d{2}-\d{2}$/.test(d);
+  const a = read("daily revenue", r => { if (dayOk(r[0])) (out.days[r[0]] = out.days[r[0]] || { revenue: 0, bytes: 0 }).revenue = Number(r[1]) || 0; });
+  const b = read("daily data usage", r => { if (dayOk(r[0])) (out.days[r[0]] = out.days[r[0]] || { revenue: 0, bytes: 0 }).bytes = Number(r[1]) || 0; });
+  read("payment methods", r => out.methods.push({ method: r[0], amount: Number(r[1]) || 0, count: Number(r[2]) || 0 }));
+  if (!a && !b) throw new Error(name + " has no daily revenue or data table.");
+  return out;
+}
+const fmtBytes = b => { b = Number(b) || 0; return b >= 1e12 ? (b / 1e12).toFixed(2) + " TB" : b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : (b / 1e6).toFixed(0) + " MB"; };
+async function wifiPage() {
+  const dayRows = (must(await db.from("wifi_daily").select("*").order("day", { ascending: true }).limit(3000)) || []);
+  const incRows = can("income.view") ? (must(await db.from("income").select("ref,amount").eq("income_type", "Landlord WiFi")) || []) : [];
+  const posted = Object.fromEntries(incRows.map(r => [r.ref, Number(r.amount)]));
+  const months = {}; dayRows.forEach(r => { const m = r.day.slice(0, 7), o = months[m] = months[m] || { rev: 0, bytes: 0, days: 0, paying: 0 }; o.rev += Number(r.revenue); o.bytes += Number(r.bytes); o.days++; if (Number(r.revenue) > 0) o.paying++; });
+  const keys = Object.keys(months).sort().reverse(), can_ = can("income.add"), MN = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const last = dayRows.slice(-14).reverse();
+  $("#view").innerHTML = `<h2>Landlord WiFi</h2><p style="color:var(--mut);margin-top:0">Payments from your PPPoE customers go to their own till and are billed in Centipid. Upload Centipid's analytics reports here (Centipid > Analytics > export CSV): <b>Monthly</b>, <b>Yearly</b> or a <b>custom date range</b>. Days that are already saved are updated, never counted twice. Then add each month to your Income with one press.</p>
+    ${can_ ? `<div class="card" style="margin:10px 0"><label>Centipid report(s) (CSV, you may choose several)<input type="file" id="wf" accept=".csv,text/csv" multiple></label><div id="wprev"></div></div>` : ""}
+    <h3>Months</h3><div class="wrap"><table><thead><tr><th>Month</th><th>Revenue (KES)</th><th>Data used</th><th>Days saved</th><th>KES per GB</th><th>In your Income</th><th></th></tr></thead><tbody id="wtb">${keys.map(m => { const o = months[m], ref = "WIFI-" + m, inc = posted[ref], gb = o.bytes / 1e9, st = inc == null ? `<span class="tag draft">Not added</span>` : inc === o.rev ? `<span class="tag ok">KES ${kes(inc)}</span>` : `<span class="tag bad">KES ${kes(inc)} (differs)</span>`;
+      return `<tr><td><b>${MN[Number(m.slice(5))]} ${m.slice(0, 4)}</b></td><td class="n">${kes(o.rev)}</td><td>${fmtBytes(o.bytes)}</td><td>${o.days}</td><td class="n">${gb > 0 ? (o.rev / gb).toFixed(2) : ""}</td><td>${st}</td><td class="acts">${can_ && inc !== o.rev && o.rev > 0 ? `<button class="btn sm" data-m="${m}">${inc == null ? "Add to income" : "Update income"}</button>` : ""}</td></tr>`; }).join("") || `<tr><td colspan="7">Nothing yet. Upload a Centipid report above.</td></tr>`}</tbody></table></div>
+    ${last.length ? `<h3>Latest days</h3><div class="wrap"><table><thead><tr><th>Day</th><th>Revenue (KES)</th><th>Data used</th></tr></thead><tbody>${last.map(r => `<tr><td>${esc(r.day)}</td><td class="n">${kes(r.revenue)}</td><td>${fmtBytes(r.bytes)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    <p style="color:var(--mut)"><small>The current month stays "open": upload a newer report later and press <b>Update income</b> to bring that month's income line up to date. A day's figure is only ever raised, so uploading an older file again is safe.</small></p>`;
+  if ($("#wf")) $("#wf").onchange = async e => {
+    const prev = $("#wprev"), files = [...e.target.files]; prev.innerHTML = ""; if (!files.length) return;
+    const merged = {}, info = [];
+    for (const f of files) { try { const r = parseCentipid(await f.text(), f.name); info.push(`<li><b>${esc(f.name)}</b>: ${esc(r.period)}, ${Object.keys(r.days).length} days${r.methods.length ? "; " + r.methods.filter(m => m.amount).map(m => esc(m.method) + " KES " + kes(m.amount)).join(", ") : ""}</li>`);
+        for (const [d, v] of Object.entries(r.days)) { const o = merged[d] = merged[d] || { revenue: 0, bytes: 0 }; o.revenue = Math.max(o.revenue, v.revenue); o.bytes = Math.max(o.bytes, v.bytes); } }
+      catch (err) { prev.innerHTML = `<p class="msg bad">${esc(err.message)}</p>`; return; } }
+    let ds = Object.keys(merged).sort(); const first = ds.findIndex(d => merged[d].revenue > 0 || merged[d].bytes > 0); ds = first < 0 ? [] : ds.slice(first);   // skip the empty days before WiFi billing began
+    if (!ds.length) { prev.innerHTML = `<ul>${info.join("")}</ul><p class="msg bad">There are no days with revenue or data in these files.</p>`; return; }
+    const rows = ds.map(d => ({ day: d, revenue: merged[d].revenue, bytes: merged[d].bytes })), tot = rows.reduce((s, r) => s + r.revenue, 0);
+    prev.innerHTML = `<ul>${info.join("")}</ul><p><b>${rows.length} days</b> from ${esc(ds[0])} to ${esc(ds[ds.length - 1])}, revenue <b>KES ${kes(tot)}</b>, data ${fmtBytes(rows.reduce((s, r) => s + r.bytes, 0))}.</p><button class="btn" id="wgo">Save these days</button> <span id="wmsg"></span>`;
+    $("#wgo").onclick = async () => { $("#wgo").disabled = true; for (let i = 0; i < rows.length; i += 400) { const x = await db.rpc("wifi_import", { p_rows: rows.slice(i, i + 400), p_source: "csv" }); if (x.error) { $("#wmsg").textContent = x.error.message; $("#wgo").disabled = false; return; } }
+      toast("Saved " + rows.length + " days"); wifiPage(); };
+  };
+  $("#wtb").onclick = async e => { const b = e.target.closest("button[data-m]"); if (!b) return; const x = await db.rpc("wifi_post_income", { p_month: b.dataset.m + "-01" }); if (x.error) return toast(x.error.message);
+    toast(x.data.action === "posted" ? "Added KES " + kes(x.data.amount) + " to Income" : "Income line updated to KES " + kes(x.data.amount)); wifiPage(); };
+}
+
 async function quotesPage() {
   await loadCompany();
   const all = (must(await db.from("documents").select("*").eq("doc_type", "Quotation").eq("status", "Issued").order("id", { ascending: false }).limit(2000)) || []).filter(r => r.quote_state);
@@ -1399,11 +1447,11 @@ async function summaryPage() {
   const M = r.months, tt = k => sumBy(M, m => m[k]), L = r.lines || {}, rt = r.retail, j = r.jobs, rp = r.repairs, iv = r.inventory, tr = r.transport;
   const margin = rt.sales ? (100 * (rt.sales - rt.cogs) / rt.sales).toFixed(1) + "%" : "0.0%";
   const body = `<h2 style="margin-top:0">Summary — ${yr}</h2>
-    <h3>Month by month</h3>${tbl(["Month", "Repairs & installs", "Shop sales", "Printing & Cyber", "Total income", "Expenses", "Cash profit", "Cash in", "M-Pesa in", "Bank in"],
-      M.map(m => [MONTHS[m.m - 1], m.services_income, m.retail, m.printing_cyber, m.total_income, m.expenses, m.profit, m.cash_in, m.mpesa_in, m.bank_in]),
-      ["Year total", tt("services_income"), tt("retail"), tt("printing_cyber"), tt("total_income"), tt("expenses"), tt("profit"), tt("cash_in"), tt("mpesa_in"), tt("bank_in")])}
+    <h3>Month by month</h3>${tbl(["Month", "Repairs & installs", "Shop sales", "Printing & Cyber", "Landlord WiFi", "Total income", "Expenses", "Cash profit", "Cash in", "M-Pesa in", "Bank in"],
+      M.map(m => [MONTHS[m.m - 1], m.services_income, m.retail, m.printing_cyber, m.wifi || 0, m.total_income, m.expenses, m.profit, m.cash_in, m.mpesa_in, m.bank_in]),
+      ["Year total", tt("services_income"), tt("retail"), tt("printing_cyber"), tt("wifi"), tt("total_income"), tt("expenses"), tt("profit"), tt("cash_in"), tt("mpesa_in"), tt("bank_in")])}
     <h3>Income by business line</h3>${tbl(["Line", "Amount"], [["Repairs", L["Repair"] || 0], ["Electrical installations", L["Electrical installation"] || 0], ["CCTV installations", L["CCTV installation"] || 0], ["Other services", L["Other service"] || 0],
-      ["Retail sales (accessories & electronics)", L["Retail sales"] || 0], ["Printing & Cyber", L["Printing & Cyber"] || 0]], ["Total", tt("total_income")])}
+      ["Retail sales (accessories & electronics)", L["Retail sales"] || 0], ["Printing & Cyber", L["Printing & Cyber"] || 0], ["Landlord WiFi (PPPoE customers)", L["Landlord WiFi"] || 0]], ["Total", tt("total_income")])}
     <h3>Retail margin</h3>${tbl(["", "KES"], [["Sales", rt.sales], ["Cost of goods sold", rt.cogs], ["Gross profit", rt.sales - rt.cogs], ["Margin", margin]])}
     <h3>Field jobs — installations (all time)</h3>${tbl(["", "Value"], [["Jobs recorded", j.count], ["Jobs completed", j.done], ["Contract value", j.contract], ["Collected so far", j.paid], ["Balance owed by clients", j.balance], ["Job costs", j.costs], ["Job profit", j.profit]])}
     <h3>Transport & logistics (year)</h3>${tbl(["", "KES"], [["Transport / Logistics", tr.transport], ["Fuel", tr.fuel], ["Total", tr.transport + tr.fuel]])}
@@ -1720,7 +1768,7 @@ async function route() {
   if (nv && nv[2] && !can(nv[2]) && !(k === "suppliers")) { $("#view").innerHTML = `<h2>Not allowed</h2><p>Your role (${esc(roleName(me.role))}) does not include this page. Ask the owner if you need it.</p>`; return; }
   const decorate = () => { const h = document.querySelector("#view > h2"); if (h) { const w = document.createElement("div"); w.className = "pagehead"; w.innerHTML = BRAND.icon(k, 22); h.replaceWith(w); w.appendChild(h); } };
   try { if (k === "dashboard") await dashboard(); else if (k === "lists") await listsPage(); else if (k === "docs") await docsPage(); else if (k === "eod") await eodPage(); else if (k === "monthly") await monthlyPage(); else if (k === "summary") await summaryPage();
-    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "equipment") await equipmentPage(); else if (k === "till") await tillPage(); else if (k === "vault") await vaultPage(); else if (k === "projects") await projectsPage(); else if (k === "policies") await policiesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
+    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "equipment") await equipmentPage(); else if (k === "till") await tillPage(); else if (k === "wifi") await wifiPage(); else if (k === "vault") await vaultPage(); else if (k === "projects") await projectsPage(); else if (k === "policies") await policiesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
 }
 async function start() {
   const { data: { session } } = await db.auth.getSession();
