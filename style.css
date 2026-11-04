@@ -86,3 +86,4 @@ header .btn.ghost,.hero .btn.ghost{background:transparent;color:#fff;border:1px 
 .tag.draft{background:#eef2f6;color:#475467}.tag.imp{background:#e0f2fe;color:#075985}
 td.acts{white-space:normal}td.acts .btn{margin:2px 2px 2px 0}
 .box{border:1px solid var(--line,#d0d5dd);border-radius:8px;padding:8px 12px;margin:8px 0}
+.cp{border:0;background:transparent;cursor:pointer;color:var(--mut);padding:0 4px;font-size:14px;line-height:1}.cp:hover{color:inherit}

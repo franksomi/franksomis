@@ -27,7 +27,7 @@ const PAY = ["Cash", "M-Pesa", "Bank"], PAYX = [...PAY, "On account"];
 const LEFT_WITH = ["SIM", "Memory card", "Battery", "Charger", "Case"], CONDITION = ["Cracked screen", "Scratches", "Water damage", "Will not power on"];
 const T = {
   repairs: { title: "Repairs", view: "v_repairs", perm: "repairs", table: "repairs", order: "id", print: "jobcard", mpay: "repair",
-    cols: [["id", "No."], ["received_on", "Received"], ["customer_name", "Customer"], ["contact", "Contact"], ["alt", "Alt. contact"], ["item_type", "Item"], ["brand_model", "Brand / model"], ["fault", "Fault"],
+    cols: [["id", "Job no.", "jc"], ["received_on", "Received"], ["customer_name", "Customer"], ["contact", "Contact"], ["alt", "Alt. contact"], ["item_type", "Item"], ["brand_model", "Brand / model"], ["fault", "Fault"],
       ["stage", "Stage"], ["total_cost", "Total (KES)", "n"], ["balance_due", "Balance due", "n"], ["deposit_held", "Deposit held", "n"], ["status", "Status", "tag"]],
     fields: [["received_on", "Date received", "date", { today: 1 }], ["customer_name", "Customer name", "text", { req: 1 }], ["contact", "Contact", "text"],
       ["item_type", "Item type", "list:item_type"], ["brand_model", "Brand / model", "list:brand"], ["serial_no", "Serial no. / IMEI", "text"],
@@ -40,11 +40,11 @@ const T = {
       ["deposit_received", "Refundable deposit received", "number"], ["deposit_payment", "Deposit paid by", "select:" + PAY.join()], ["deposit_mpesa_ref", "Deposit M-Pesa code", "text"], ["deposit_applied", "Deposit applied to bill", "number"], ["deposit_refunded", "Deposit refunded", "number"],
       ["returned_on", "Date returned", "date"], ["remarks", "Remarks", "text", { full: 1 }]] },
   sales: { title: "Sales", view: "sales_v", perm: "sales", table: "sales", order: "id",
-    cols: [["sold_on", "Date"], ["customer", "Customer / receipt"], ["item_name", "Item"], ["qty", "Qty", "n"], ["unit_cost", "Unit cost", "n", "owner"], ["unit_price", "Unit price", "n"],
-      ["total_sales", "Total", "n"], ["profit", "Profit", "n", "owner"], ["payment", "Payment"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"]],
-    fields: [["sold_on", "Date", "date", { today: 1 }], ["customer", "Customer / receipt no.", "text"], ["item_id", "Item (pick from stock — name and unit cost fill in)", "stock", { full: 1 }],
+    cols: [["sold_on", "Date"], ["receipt_no", "Receipt no.", "cp"], ["customer", "Customer"], ["item_name", "Item"], ["qty", "Qty", "n"], ["unit_cost", "Unit cost", "n", "owner"], ["unit_price", "Unit price", "n"],
+      ["total_sales", "Total", "n"], ["profit", "Profit", "n", "owner"], ["payment", "Payment", "pay"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"]],
+    fields: [["receipt_no", "Receipt no. (made for you; the items of one sale share it)", "text"], ["sold_on", "Date", "date", { today: 1 }], ["customer", "Customer", "text"], ["item_id", "Item (pick from stock: name, category and price fill in)", "stock", { full: 1 }],
       ["category", "Category", "list:stock_type"], ["qty", "Qty", "number", { req: 1 }], ["unit_price", "Unit price (KES)", "number", { req: 1 }],
-      ["payment", "Payment method", "select:" + PAYX.join()], ["account_id", "Credit account (choose when payment is On account)", "account"], ["mpesa_ref", "M-Pesa code (if paid by M-Pesa)", "text"], ["cost_new", "Unit cost for an item not in stock (KES)", "number", { owner: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
+      ["payment", "Payment method", "select:" + PAYX.join() + ",Split"], ["cash_amt", "Cash part (KES)", "number"], ["mpesa_amt", "M-Pesa part (KES)", "number"], ["account_id", "Credit account (choose when payment is On account)", "account"], ["mpesa_ref", "M-Pesa code (if paid by M-Pesa)", "text"], ["cost_new", "Unit cost for an item not in stock (KES)", "number", { owner: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
   inventory: { title: "Inventory", view: "v_stock", perm: "inventory", table: "inventory_items", order: "code",
     cols: [["code", "Code"], ["description", "Description"], ["stock_type", "Type"], ["qty_received", "Received", "n"], ["qty_sold", "Sold", "n"], ["qty_used", "Used", "n"], ["on_hand", "On hand", "n"],
       ["unit_cost", "Unit cost", "n", "owner"], ["selling_price", "Selling price", "n"], ["stock_value", "Stock value", "n", "owner"], ["supplier", "Supplier"], ["shop_visible", "Online", "yn"], ["status", "Status", "tag"]],
@@ -53,7 +53,7 @@ const T = {
       ["shop_visible", "Sell this item in the online shop (needs a selling price and stock)", "check"], ["shop_featured", "Show as Popular on the website", "check"],
       ["shop_title", "Shop name (leave empty to use the description)", "text"], ["shop_image", "Photo (web address, or choose a file to upload)", "image", { full: 1 }], ["shop_desc", "Shop description (one or two sentences)", "text", { full: 1 }]] },
   jobs: { title: "Field Jobs", view: "v_jobs", perm: "jobs", table: "field_jobs", order: "id", print: "fieldcard", mpay: "job", margin: 1,
-    cols: [["job_no", "Job No."], ["started_on", "Started"], ["client_name", "Client"], ["site", "Site"], ["job_type", "Type"], ["contract_price", "Price", "n"], ["paid", "Paid", "n"], ["balance", "Balance", "n"], ["job_profit", "Job profit", "n", "owner"], ["status", "Stage", "tag"]],
+    cols: [["job_no", "Job No.", "cp"], ["started_on", "Started"], ["client_name", "Client"], ["site", "Site"], ["job_type", "Type"], ["contract_price", "Price", "n"], ["paid", "Paid", "n"], ["balance", "Balance", "n"], ["job_profit", "Job profit", "n", "owner"], ["status", "Stage", "tag"]],
     fields: [["started_on", "Date started", "date", { today: 1 }], ["client_name", "Client name", "text", { req: 1 }], ["contact", "Contact", "text"], ["site", "Site / location", "text"],
       ["job_type", "Job type", "select:Electrical installation,CCTV installation,Electrical repair,CCTV repair,Transport / logistics,Other"],
       ["contract_price", "Contract price (KES)", "number"], ["status", "Stage (customer sees this)", "select:Booked,Site visit,Quote sent,Waiting for materials,In progress,Testing,On hold,Completed", { def: "Booked" }], ["completed_on", "Date completed", "date"],
@@ -64,7 +64,7 @@ const T = {
       ["payment", "Payment method", "select:" + PAYX.join()], ["account_id", "Credit account (choose when payment is On account)", "account"], ["income_type", "Income type", "select:Repair,Electrical installation,CCTV installation,Other service,Landlord WiFi"], ["mpesa_ref", "M-Pesa code", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   expenses: { title: "Expenses", view: "expenses", perm: "expenses", table: "expenses", order: "spent_on",
     cols: [["spent_on", "Date"], ["description", "Description"], ["category", "Category"], ["amount", "Amount", "n"], ["payment", "Payment"], ["mpesa_ref", "M-Pesa code"], ["job_no", "Job No."]],
-    fields: [["spent_on", "Date", "date", { today: 1 }], ["description", "Description", "text", { full: 1 }], ["category", "Category", "select:Job materials,Labor / Technician,Transport / Logistics,Fuel,Rent,Utilities,Stock purchase,Airtime / Internet,Landlord WiFi - Bandwidth,Landlord WiFi - Hardware,Landlord WiFi - Electricity,Landlord WiFi - SMS,Landlord WiFi - Software & domain,Landlord WiFi - Other,Other"],
+    fields: [["spent_on", "Date", "date", { today: 1 }], ["description", "Description", "text", { full: 1 }], ["category", "Category", "select:Job materials,Labor / Technician,Transport / Logistics,Fuel,Rent,Utilities,Stock purchase,Airtime / Internet,Landlord WiFi - Bandwidth,Landlord WiFi - Hardware,Landlord WiFi - Electricity,Landlord WiFi - SMS,Landlord WiFi - Software & domain,Landlord WiFi - Other,Marketing - Ads & social media,Marketing - Flyers & printing,Marketing - Promotions & gifts,Marketing - Signage & branding,Marketing - Sponsorship & events,Marketing - Other,Other"],
       ["amount", "Amount (KES)", "number", { req: 1 }], ["payment", "Payment method", "select:" + PAY.join()], ["mpesa_ref", "M-Pesa code", "text"], ["job_no", "Job No. (optional)", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   services: { title: "Printing & Cyber", view: "services", perm: "services", table: "services", order: "id", quick: 1,
     cols: [["done_on", "Date"], ["service", "Service"], ["customer", "Customer"], ["qty", "Qty", "n"], ["unit_price", "Price", "n"], ["total", "Total", "n"], ["payment", "Payment"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"]],
@@ -79,7 +79,7 @@ const T = {
     fields: [["name", "Supplier name", "text", { req: 1 }], ["contact_person", "Contact person", "text"], ["phone", "Phone", "text"], ["location", "Location", "text"], ["supplies", "What they supply", "text", { full: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
 };
 const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
-  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["quotes", "Open quotes", "docs.view"], ["equipment", "Client equipment", "equipment.view"], ["till", "Till payments", "income.add"], ["wifi", "Landlord WiFi", "reports.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["inventory", "Inventory", "inventory.view"],
+  ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["quotes", "Open quotes", "docs.view"], ["equipment", "Client equipment", "equipment.view"], ["till", "Till payments", "income.add"], ["wifi", "Landlord WiFi", "reports.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["staffpay", "Staff pay", "payroll.manage"], ["inventory", "Inventory", "inventory.view"],
   ["mpay", "M-Pesa checkout", "mpay.use"], ["sms", "SMS messages", "sms.manage"], ["eod", "End of day", "eod.view"], ["monthly", "Monthly report", "reports.view+costs.view"], ["summary", "Year summary", "reports.view+costs.view"],
   ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["payables", "Supplier payables", "payables.view"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["vault", "Company documents", "vault.manage"], ["projects", "Website projects", "projects.manage"], ["policies", "Website policies", "settings.manage"], ["users", "Users & roles", "users.manage"]];
 const navFor = () => NAV.filter(n => !n[2] || can(n[2]));
@@ -178,6 +178,8 @@ async function openForm(key, row) {
     ${key === "sales" && !row ? linesBlock("sales", [], "More items on this sale") : key === "repairs" && (can("repairs.add") || can("repairs.edit")) ? linesBlock("repairs", oldItems, "More parts and items used (as many as you need)") : ""}
     <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
   wireLines(f, key);
+  if (key === "sales") { const pf = f.elements.payment; if (pf && row) pf.dataset.v = row.payment || ""; wireSaleSplit(f, !row);
+    if (!row && f.elements.receipt_no && !f.elements.receipt_no.value) { const rn = await db.rpc("next_sale_receipt"); if (!rn.error && rn.data) f.elements.receipt_no.value = rn.data; } }
   f.oninput = f.onchange = f.onclick = null;
   const pasteFix = mpesaPasteFix(f); let billFn = null;
   if (key === "income" && !row) wireIncomeFill(f);
@@ -196,6 +198,15 @@ async function openForm(key, row) {
       if (data.payment === "On account" && !data.account_id) return toast("Choose the credit account this is billed to.");
       if (data.payment !== "On account") data.account_id = null;
     }
+    if (key === "sales") {
+      if (data.receipt_no) data.receipt_no = data.receipt_no.toUpperCase().replace(/\s+/g, "");
+      if (data.payment === "Split") {
+        const lines = [{ qty: data.qty, price: data.unit_price }, ...(!row ? xl.lines.map(l => ({ qty: l.qty, price: l.unit_price ?? 0 })) : [])], tot = Math.round(lines.reduce((s, l) => s + Number(l.qty || 0) * Number(l.price || 0), 0) * 100) / 100;
+        const cv = Number(data.cash_amt || 0), mv = Number(data.mpesa_amt || 0);
+        if (Math.abs(cv + mv - tot) >= 0.005) return toast(`Cash KES ${kes(cv)} + M-Pesa KES ${kes(mv)} must add up to the sale total KES ${kes(tot)}.`);
+        if (mv > 0 && !data.mpesa_ref) return toast("Type the M-Pesa code for the M-Pesa part.");
+      } else { data.cash_amt = null; data.mpesa_amt = null; }
+    }
     const costVal = key === "inventory" ? data.unit_cost : key === "sales" ? data.cost_new : undefined;
     delete data.unit_cost; delete data.cost_new;
     if (key === "repairs") { data.part1_qty ??= 1; data.part2_qty ??= 1; }
@@ -206,9 +217,12 @@ async function openForm(key, row) {
     if (data.deposit_mpesa_ref) data.deposit_mpesa_ref = data.deposit_mpesa_ref.toUpperCase().replace(/\s+/g, "");
     let payload = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null));
     if (key === "sales" && !row && xl.lines.length) {      // several items on one sale: every line is saved together, or none
-      const shared = { sold_on: data.sold_on, customer: data.customer, payment: data.payment, account_id: data.account_id, mpesa_ref: data.mpesa_ref, notes: data.notes };
+      const shared = { sold_on: data.sold_on, customer: data.customer, payment: data.payment, account_id: data.account_id, mpesa_ref: data.mpesa_ref, notes: data.notes, receipt_no: data.receipt_no };
       const extra = xl.lines.map(l => ({ ...shared, item_id: l.item_id, item_name: l.description, qty: l.qty, unit_price: l.unit_price ?? 0 }));
-      const all = [payload, ...extra], keys = [...new Set(all.flatMap(o => Object.keys(o)))];
+      const all = [payload, ...extra];
+      if (data.payment === "Split") { let left = Math.round(Number(data.cash_amt || 0) * 100);      // cash fills the first items, M-Pesa the rest; one item may be shared between the two
+        all.forEach(o => { const t = Math.round(Number(o.qty) * Number(o.unit_price) * 100), c = Math.min(t, left); left -= c; o.cash_amt = c / 100; o.mpesa_amt = (t - c) / 100; }); }
+      const keys = [...new Set(all.flatMap(o => Object.keys(o)))];
       payload = all.map(o => Object.fromEntries(keys.map(k => [k, o[k] ?? null])));
     }
     const q = row ? db.from(def.table).update(data).eq("id", row.id).select("id") : db.from(def.table).insert(payload).select("id");
@@ -250,9 +264,103 @@ async function openForm(key, row) {
     const url = db.storage.from("shop").getPublicUrl(path).data.publicUrl; f.elements[inp.dataset.img].value = url;
     const pv = f.querySelector(`[data-prev="${inp.dataset.img}"]`); pv.src = url; pv.style.display = ""; msg.textContent = "Uploaded.";
   });
-  if (key === "sales" && !row && f.elements.item_id) f.elements.item_id.addEventListener("change", () => { const it = stockItems.find(i => String(i.id) === f.elements.item_id.value); if (it && it.selling_price && !Number(f.elements.unit_price.value)) { f.elements.unit_price.value = it.selling_price; f.elements.unit_price.dispatchEvent(new Event("input")); } });
+  if (key === "sales" && !row && f.elements.item_id) f.elements.item_id.addEventListener("change", () => {
+    const it = stockItems.find(i => String(i.id) === f.elements.item_id.value), up = f.elements.unit_price; if (!it) return;
+    if (it.stock_type && (!f.elements.category.value || f.elements.category.dataset.auto)) { f.elements.category.value = it.stock_type; f.elements.category.dataset.auto = "1"; }
+    if (it.selling_price && (!Number(up.value) || up.dataset.auto)) { up.value = it.selling_price; up.dataset.auto = "1"; up.dispatchEvent(new Event("input", { bubbles: true })); }
+    let h = f.querySelector("#itemhint"); if (!h) { f.elements.item_id.closest("label").insertAdjacentHTML("beforeend", `<small id="itemhint" style="color:var(--mut)"></small>`); h = f.querySelector("#itemhint"); }
+    h.textContent = `${it.on_hand} in stock · price KES ${kes(it.selling_price)}${it.unit_cost != null && can("costs.view") ? " · cost KES " + kes(it.unit_cost) : ""}${Number(it.on_hand) < 1 ? " · NONE LEFT IN STOCK" : ""}`; });
+  if (key === "sales" && !row) { f.elements.unit_price.addEventListener("input", e => { if (e.isTrusted) delete e.target.dataset.auto; }); f.elements.category.addEventListener("input", e => { if (e.isTrusted) delete e.target.dataset.auto; }); }
   const sv = f.querySelector("[data-svc]"); if (sv) sv.onchange = () => { const o = sv.selectedOptions[0]; if (o && o.dataset.price && !row) f.elements.unit_price.value = o.dataset.price; };
   dlg.showModal();
+}
+
+
+// ---- staff pay: salaries, wages, commissions and advances ----
+const PAYKINDS = { Salary: "Salaries", Wage: "Wages", Commission: "Commissions", Advance: "Staff advances" };
+async function staffPayPage() {
+  const rows = must(await db.from("staff_pay").select("*").order("paid_on", { ascending: false }).order("id", { ascending: false }).limit(2000)) || [];
+  const pf = await db.from("profiles").select("full_name,active"), staff = ((pf.error ? [] : pf.data) || []).filter(p => p.full_name && p.active !== false).map(p => p.full_name);
+  const people = [...new Set([...rows.map(r => r.person), ...staff])].sort((a, b) => a.localeCompare(b));
+  const bal = {}; rows.forEach(r => { const k = r.person.toLowerCase(), o = bal[k] = bal[k] || { name: r.person, given: 0, back: 0 }; if (r.kind === "Advance") o.given += Number(r.gross); o.back += Number(r.recovered); });
+  const owing = Object.values(bal).map(o => ({ ...o, left: Math.round((o.given - o.back) * 100) / 100 })).filter(o => o.left > 0).sort((a, b) => b.left - a.left);
+  const ym = iso(new Date()).slice(0, 7), yr = ym.slice(0, 4), net = r => Number(r.gross) - Number(r.recovered);
+  const sum = (kind, pre) => rows.filter(r => r.kind === kind && r.paid_on.startsWith(pre)).reduce((t, r) => t + net(r), 0);
+  const MN = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], per = p => p ? MN[Number(p.slice(5, 7))] + " " + p.slice(0, 4) : "";
+  window.__pay = rows;
+  $("#view").innerHTML = `<h2>Staff pay</h2><p style="color:var(--mut);margin-top:0">Salaries, wages, commissions and advances. Each payment is also recorded in <b>Expenses</b> (${Object.values(PAYKINDS).join(", ")}), so profit and the day's cash already include it. An advance is counted when it is given; when it is later recovered from pay, only the cash actually paid is counted, so nothing is counted twice.</p>
+    <div class="bar"><button class="btn" id="sp_new">+ Pay someone</button><input id="q" placeholder="Search…" style="max-width:240px"><span style="color:var(--mut)">${rows.length} payments</span></div>
+    <div class="cards">${Object.keys(PAYKINDS).map(k => `<div class="card"><small>${esc(PAYKINDS[k])} this month</small><b>KES ${kes(sum(k, ym))}</b><small>this year KES ${kes(sum(k, yr))}</small></div>`).join("")}</div>
+    ${owing.length ? `<h3>Advances not yet recovered</h3><div class="wrap"><table><thead><tr><th>Person</th><th>Given</th><th>Recovered</th><th>Still owed to you</th></tr></thead><tbody>${owing.map(o => `<tr><td><b>${esc(o.name)}</b></td><td class="n">${kes(o.given)}</td><td class="n">${kes(o.back)}</td><td class="n"><b>${kes(o.left)}</b></td></tr>`).join("")}</tbody></table></div>` : ""}
+    <h3>Payments</h3><div class="wrap"><table><thead><tr><th>Date</th><th>Person</th><th>Type</th><th>For</th><th>Amount</th><th>Advance recovered</th><th>Paid out</th><th>How</th><th></th></tr></thead><tbody id="tb">${rows.map((r, i) => `<tr><td>${esc(r.paid_on)}</td><td>${esc(r.person)}</td><td>${esc(r.kind)}</td><td>${esc(per(r.period))}</td><td class="n">${kes(r.gross)}</td><td class="n">${Number(r.recovered) ? kes(r.recovered) : ""}</td><td class="n"><b>${kes(net(r))}</b></td><td>${esc(r.payment || "")}${r.mpesa_ref ? " " + esc(r.mpesa_ref) : ""}</td><td><button class="btn sm warn" data-del="${i}">Delete</button></td></tr>`).join("") || `<tr><td colspan="9"><div class="empty">${BRAND.emptyArt(130)}No staff payments yet. Press “+ Pay someone”.</div></td></tr>`}</tbody></table></div>`;
+  $("#q").oninput = e => { const t = e.target.value.toLowerCase(); document.querySelectorAll("#tb tr").forEach(tr => tr.hidden = !tr.textContent.toLowerCase().includes(t)); };
+  $("#sp_new").onclick = () => staffPayDialog(people, bal);
+  $("#tb").onclick = async e => { const b = e.target.closest("[data-del]"); if (!b) return; const r = rows[b.dataset.del];
+    if (!confirm(`Delete this ${r.kind.toLowerCase()} of KES ${kes(r.gross)} for ${r.person}? Its entry in Expenses is removed too.`)) return;
+    const x = await db.rpc("staff_pay_delete", { p_id: r.id }); if (x.error) return toast(x.error.message); toast("Deleted"); staffPayPage(); };
+}
+function staffPayDialog(people, bal) {
+  const f = $("#dlgForm"); f.oninput = f.onchange = f.onclick = null;
+  f.innerHTML = `<h2>Pay someone</h2><div class="grid">
+    <label>Date<input name="date" type="date" value="${iso(new Date())}" required></label>
+    <label>Who<input name="person" list="sp_people" autocomplete="off" required placeholder="Name"><datalist id="sp_people">${people.map(p => `<option value="${esc(p)}">`).join("")}</datalist></label>
+    <label>Type<select name="kind"><option>Salary</option><option>Wage</option><option>Commission</option><option>Advance</option></select></label>
+    <label id="sp_perl">For the month of<input name="period" type="month" value="${iso(new Date()).slice(0, 7)}"></label>
+    <div class="full box" id="sp_comm" hidden style="margin:0">Commission helper: sales of KES <input name="base" type="number" min="0" step="any" style="width:130px"> at <input name="rate" type="number" min="0" step="any" style="width:80px"> % <button type="button" class="btn sm ghost" id="sp_calc">Work it out</button></div>
+    <label>Amount (KES)<input name="gross" type="number" min="0.01" step="0.01" required inputmode="decimal"></label>
+    <label id="sp_recl">Advance to recover from this (KES)<input name="rec" type="number" min="0" step="0.01" inputmode="decimal" value=""></label>
+    <div class="full" id="sp_owe" style="color:var(--mut)"><span id="sp_owetxt"></span> <button type="button" class="btn sm ghost" id="sp_all" hidden>Recover it</button></div>
+    <div class="full" id="sp_net" style="font-weight:600"></div>
+    <label>Paid by<select name="pay"><option>Cash</option><option>M-Pesa</option><option>Bank</option></select></label>
+    <label>M-Pesa code (if paid by M-Pesa)<input name="code" autocomplete="off" placeholder="SGH7K2L9XQ"></label>
+    <label class="full">Note (optional)<input name="note" autocomplete="off"></label></div>
+    <div class="bar" style="margin-top:14px"><button class="btn" value="save">Save payment</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  const el = f.elements, num = n => Number(el[n].value) || 0, r2 = v => Math.round(v * 100) / 100, owed = () => { const o = bal[String(el.person.value).trim().replace(/\s+/g, " ").toLowerCase()]; return o ? r2(o.given - o.back) : 0; };
+  const upd = () => {
+    const adv = el.kind.value === "Advance"; $("#sp_perl").hidden = adv; $("#sp_recl").hidden = adv; $("#sp_comm").hidden = el.kind.value !== "Commission";
+    const ow = owed(); $("#sp_owetxt").innerHTML = ow > 0 && !adv ? `${esc(el.person.value.trim())} still owes <b>KES ${kes(ow)}</b> from earlier advances.` : adv && ow > 0 ? `${esc(el.person.value.trim())} already owes KES ${kes(ow)} from earlier advances.` : ""; $("#sp_all").hidden = !(ow > 0 && !adv);
+    const rec = adv ? 0 : num("rec"), n = num("gross") - rec; $("#sp_net").innerHTML = num("gross") > 0 ? (rec > num("gross") ? `<span class="tag bad">The advance recovered is more than the amount</span>` : rec > ow + 0.001 ? `<span class="tag bad">Only KES ${kes(ow)} is owed</span>` : `Cash to pay out now: KES ${kes(r2(n))}`) : "";
+  };
+  f.oninput = f.onchange = e => { if (e.target.name === "code" && e.target.value.length > 14) { const p = parseMpesa(e.target.value); if (p.code) { e.target.value = p.code; el.pay.value = "M-Pesa"; } } upd(); };
+  f.onclick = e => { if (e.target.id === "sp_all") { el.rec.value = Math.min(owed(), num("gross") || owed()); upd(); } if (e.target.id === "sp_calc") { if (num("base") > 0 && num("rate") > 0) { el.gross.value = r2(num("base") * num("rate") / 100); upd(); } } };
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault();
+    const adv = el.kind.value === "Advance", rec = adv ? 0 : num("rec"), gross = num("gross");
+    if (gross <= 0) return toast("Enter the amount."); if (rec > gross) return toast("The advance recovered cannot be more than the amount.");
+    if (gross - rec > 0 && el.pay.value === "M-Pesa" && !el.code.value.trim() && !confirm("No M-Pesa code typed. Save without it?")) return;
+    const x = await db.rpc("staff_pay_post", { p_person: el.person.value, p_kind: el.kind.value, p_gross: gross, p_recover: rec, p_payment: gross - rec > 0 ? el.pay.value : null, p_mpesa_ref: el.code.value.trim() || null, p_date: el.date.value || null, p_period: adv || !el.period.value ? null : el.period.value + "-01", p_note: el.note.value.trim() || null });
+    if (x.error) return toast(x.error.message);
+    $("#dlg").close(); toast(`Saved. ${x.data.person}: KES ${kes(x.data.net)} paid out` + (Number(x.data.advance_balance) > 0 ? `, advance still owed KES ${kes(x.data.advance_balance)}` : "")); staffPayPage(); };
+  upd(); $("#dlg").showModal();
+}
+// ---- copy a job / receipt number for pasting elsewhere (for example into an income entry) ----
+function copyText(txt) {
+  const ok = () => toast("Copied " + txt), old = () => { const t = document.createElement("textarea"); t.value = txt; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); let good = false; try { good = document.execCommand("copy"); } catch (_) {} t.remove(); good ? ok() : toast("Could not copy. Select it and copy by hand: " + txt); };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(ok, old); else old();
+}
+// ---- sales: one receipt for the items of a sale, with cash + M-Pesa split ----
+async function printSaleReceipt(r) {
+  const q = await db.from("sales_v").select("*").eq("receipt_no", r.receipt_no).order("id", { ascending: true }); if (q.error) return toast(q.error.message);
+  const ls = q.data || [r]; await loadCompany();
+  const total = ls.reduce((s, x) => s + Number(x.total_sales || 0), 0), cash = ls.reduce((s, x) => s + (x.payment === "Cash" ? Number(x.total_sales) : x.payment === "Split" ? Number(x.cash_amt || 0) : 0), 0),
+    mp = ls.reduce((s, x) => s + (x.payment === "M-Pesa" ? Number(x.total_sales) : x.payment === "Split" ? Number(x.mpesa_amt || 0) : 0), 0), bank = ls.reduce((s, x) => s + (x.payment === "Bank" ? Number(x.total_sales) : 0), 0), acct = ls.reduce((s, x) => s + (x.payment === "On account" ? Number(x.total_sales) : 0), 0);
+  const codes = [...new Set(ls.map(x => x.mpesa_ref).filter(Boolean))].join(", ");
+  const paid = [cash > 0 ? "Cash " + kes(cash) : "", mp > 0 ? "M-Pesa " + kes(mp) + (codes ? " (" + codes + ")" : "") : "", bank > 0 ? "Bank " + kes(bank) : "", acct > 0 ? "On account " + kes(acct) : ""].filter(Boolean).join(" + ");
+  const doc = { doc_type: "Receipt", doc_no: r.receipt_no, customer: ls[0].customer || "Walk-in customer", doc_date: ls[0].sold_on, reference: paid ? "Paid: " + paid : "", items: ls.map(x => ({ desc: x.item_name || "Item", qty: Number(x.qty), price: Number(x.unit_price) })), discount: 0, vat_rate: 0, paid_before: total - acct, status: "Issued" };
+  printHtml(docPrintHtml(doc), r.receipt_no + " receipt.pdf");
+}
+function wireSaleSplit(f, isNew) {
+  const pay = f.elements.payment, c = f.elements.cash_amt, m = f.elements.mpesa_amt; if (!pay || !c || !m) return;
+  const opt = [...pay.options].find(o => o.value === "Split" || o.textContent === "Split"); if (opt) { opt.value = "Split"; opt.textContent = "Cash + M-Pesa (split)"; }
+  if (pay.dataset.v) pay.value = pay.dataset.v;
+  const boxes = [c, m].map(x => x.closest("label")); boxes[1].insertAdjacentHTML("afterend", `<div class="full" id="splitnote" style="color:var(--mut);font-size:13px" hidden></div>`);
+  const note = f.querySelector("#splitnote"), r2 = v => Math.round(v * 100) / 100;
+  const total = () => { let t = Number(f.elements.qty.value || 0) * Number(f.elements.unit_price.value || 0); if (isNew) f.querySelectorAll("[data-line]").forEach(l => { t += Number(l.querySelector("[name=li_qty]").value || 0) * Number(l.querySelector("[name=li_price]").value || 0); }); return r2(t); };
+  const show = () => { const on = pay.value === "Split"; boxes.forEach(b => b.hidden = !on); note.hidden = !on; if (on) upd(); };
+  const upd = () => { const t = total(), cv = Number(c.value || 0), mv = Number(m.value || 0); note.textContent = `Sale total KES ${kes(t)}. Cash ${kes(cv)} + M-Pesa ${kes(mv)} = ${kes(r2(cv + mv))}${Math.abs(cv + mv - t) < 0.005 ? " ✓" : "  (must add up to the total)"}`; };
+  c.addEventListener("input", () => { m.value = String(Math.max(0, r2(total() - Number(c.value || 0)))); upd(); });
+  m.addEventListener("input", () => { c.value = String(Math.max(0, r2(total() - Number(m.value || 0)))); upd(); });
+  f.addEventListener("input", e => { if (pay.isConnected && pay.value === "Split" && e.target !== c && e.target !== m) upd(); });
+  pay.addEventListener("change", show); show();
 }
 
 // ---- table pages ------------------------------------------------------------
@@ -267,9 +375,11 @@ async function tablePage(key) {
   const cols = def.cols.filter(c => (c[3] !== "owner" || can("costs.view")) && (c[2] !== "acct" || can("accounts.view")));
   const head = cols.map(c => `<th>${esc(c[1])}</th>`).join("") + "<th></th>";
   const body = rows.map((r, i) => `<tr class="${r.status === "REORDER" ? "low" : ""}">${cols.map(([k, , t]) => {
-    const v = r[k]; if (t === "tag") return `<td><span class="tag ${v === "REORDER" || v === "In shop" ? "bad" : "ok"}">${esc(v)}</span></td>`;
+    const v = r[k]; if (t === "cp" || t === "jc") { const no = t === "jc" ? "JC-" + String(v).padStart(4, "0") : v; return `<td>${esc(no)}${no ? ` <button type="button" class="cp" data-cp="${esc(no)}" title="Copy ${esc(no)}" aria-label="Copy ${esc(no)}">⧉</button>` : ""}</td>`; }
+    if (t === "pay") return `<td>${v === "Split" ? `Cash ${kes(r.cash_amt)} + M-Pesa ${kes(r.mpesa_amt)}` : esc(v)}</td>`;
+    if (t === "tag") return `<td><span class="tag ${v === "REORDER" || v === "In shop" ? "bad" : "ok"}">${esc(v)}</span></td>`;
     return `<td class="${t === "n" ? "n" : ""}">${t === "n" ? kes(v) : t === "dt" ? esc(String(v || "").replace("T", " ").slice(0, 16)) : t === "yn" ? (v ? "Yes" : "") : t === "acct" ? esc(acctName(v)) : esc(v)}</td>`; }).join("")}
-    <td>${pm(def, "edit") ? `<button class="btn sm" data-edit="${i}">Edit</button>` : ""} ${def.print ? `<button class="btn sm pbtn" data-print="${i}">Print card</button>` : ""}
+    <td>${pm(def, "edit") ? `<button class="btn sm" data-edit="${i}">Edit</button>` : ""} ${def.print ? `<button class="btn sm pbtn" data-print="${i}">Print card</button>` : ""}${key === "sales" && r.receipt_no ? `<button class="btn sm ghost" data-rcpt="${i}">Receipt</button>` : ""}
     ${def.margin && can("costs.view") ? `<button class="btn sm ghost" data-mg="${i}">Margin</button>` : ""}${((key === "repairs" && ["Ready for collection", "Collected"].includes(r.stage) && Number(r.balance_due) > 0) || (key === "jobs" && r.status === "Completed" && Number(r.balance) > 0)) && can("income.add") ? `<button class="btn sm" style="background:#12b76a" data-pi="${i}">Post income</button>` : ""}${key === "jobs" && r.status === "Completed" && can("projects.manage") ? `<button class="btn sm ghost" data-wp="${i}">Show on website</button>` : ""}${def.mpay && can("mpay.use") ? `<button class="btn sm" style="background:#12b76a" data-pay="${i}">M-Pesa</button>` : ""}${def.mpay === "repair" ? ` <button class="btn sm wabtn" data-wa="${i}">Send tracking link</button>` : ""}
     ${pm(def, "delete") ? `<button class="btn sm warn" data-del="${i}">Delete</button>` : ""}</td></tr>`).join("");
   if (def.quick) await refreshLookups();
@@ -282,6 +392,8 @@ async function tablePage(key) {
   $("#q").oninput = e => { const s = e.target.value.toLowerCase(); document.querySelectorAll("#tb tr").forEach(tr => tr.hidden = !tr.textContent.toLowerCase().includes(s)); };
   $("#tb").onclick = async e => {
     const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.cp) return copyText(b.dataset.cp);
+    if (b.dataset.rcpt) return printSaleReceipt(rows[b.dataset.rcpt]);
     if (b.dataset.edit) openForm(key, rows[b.dataset.edit]);
     if (b.dataset.del && confirm("Delete this record? This cannot be undone.")) { const r = await db.from(def.table).delete().eq("id", rows[b.dataset.del].id); if (r.error) toast(r.error.message); else route(); }
     if (b.dataset.print) { let r = rows[b.dataset.print]; if (def.print === "jobcard") r = { ...r, ...(await repairChecks(r.id)), items: await repairItems(r.id) }; printCard(def.print, r); }
@@ -1449,6 +1561,7 @@ async function monthlyPage() {
     <h3>Top selling items</h3>${tbl(["Item", "Qty", "Sales", "Profit"], (r.top_items || []).map(x => [x.item, x.qty, x.sales, x.profit]))}
     <h3>Printing & Cyber by service</h3>${tbl(["Service", "Qty", "Total"], (r.service_breakdown || []).map(x => [x.service, x.qty, x.total]))}
     <h3>Expenses by category</h3>${tbl(["Category", "Amount"], (r.expense_by_category || []).map(x => [x.category, x.amount]))}
+    ${(() => { const ec = r.expense_by_category || [], sm = f => ec.filter(f).reduce((t, x) => t + Number(x.amount), 0), mk = sm(x => /^Marketing/i.test(x.category || "")), sp = sm(x => Object.values(PAYKINDS).includes(x.category)); return mk || sp ? `<p style="color:var(--mut)">${mk ? `Marketing spend: <b>KES ${kes(mk)}</b>. ` : ""}${sp ? `Staff pay (salaries, wages, commissions, advances): <b>KES ${kes(sp)}</b>.` : ""}</p>` : ""; })()}
     <h3>Daily cash closings</h3>${tbl(["Day", "Expected", "Counted", "Difference"], (r.closings || []).map(x => [x.day, x.expected, x.counted, x.variance]))}`;
   $("#view").innerHTML = `<h2>Monthly report</h2><div class="bar"><label>Month <select id="mm">${MONTHS.map((m, i) => `<option value="${i + 1}" ${i + 1 === mo ? "selected" : ""}>${m}</option>`).join("")}</select></label>
     <label>Year <input id="my" type="number" value="${yr}" style="width:100px"></label><button class="btn pbtn" id="mp">Print report</button></div><div class="card" style="overflow:auto">${body}</div>`;
@@ -1482,7 +1595,7 @@ async function summaryPage() {
 async function mpesaRecords() {
   const g = async (t, cols) => must(await db.from(t).select(cols).limit(5000)) || [];
   const out = [];
-  (await g("sales_v", "id,sold_on,total_sales,mpesa_ref,payment,item_name")).filter(x => x.payment === "M-Pesa").forEach(x => out.push({ table: "sales", id: x.id, date: x.sold_on, amount: Number(x.total_sales), ref: x.mpesa_ref, dir: "in", label: "Sale: " + (x.item_name || "") }));
+  (await g("sales_v", "id,sold_on,total_sales,mpesa_amt,mpesa_ref,payment,item_name")).filter(x => x.payment === "M-Pesa" || x.payment === "Split").forEach(x => out.push({ table: "sales", id: x.id, date: x.sold_on, amount: Number(x.payment === "Split" ? x.mpesa_amt : x.total_sales), ref: x.mpesa_ref, dir: "in", label: "Sale: " + (x.item_name || "") }));
   (await g("services", "id,done_on,total,mpesa_ref,payment,service")).filter(x => x.payment === "M-Pesa").forEach(x => out.push({ table: "services", id: x.id, date: x.done_on, amount: Number(x.total), ref: x.mpesa_ref, dir: "in", label: "Service: " + x.service }));
   (await g("income", "id,received_on,amount,mpesa_ref,payment,description,ref")).filter(x => x.payment === "M-Pesa").forEach(x => out.push({ table: "income", id: x.id, date: x.received_on, amount: Number(x.amount), ref: x.mpesa_ref, dir: "in", label: "Payment: " + (x.description || x.ref || "") }));
   (await g("expenses", "id,spent_on,amount,mpesa_ref,payment,description")).filter(x => x.payment === "M-Pesa").forEach(x => out.push({ table: "expenses", id: x.id, date: x.spent_on, amount: Number(x.amount), ref: x.mpesa_ref, dir: "out", label: "Expense: " + (x.description || "") }));
@@ -1770,7 +1883,7 @@ async function auditPage() {
 async function refreshLookups() {
   const li = must(await db.from("list_items").select("*").order("value")) || [];
   lists = { item_type: li.filter(x => x.kind === "item_type"), brand: li.filter(x => x.kind === "brand"), stock_type: li.filter(x => x.kind === "stock_type") };
-  stockItems = must(await db.from("v_stock").select("id,code,description,on_hand,selling_price").order("code")) || [];
+  stockItems = must(await db.from("v_stock").select("id,code,description,on_hand,selling_price,stock_type,unit_cost").order("code")) || [];
   suppliers = must(await db.from("suppliers").select("id,name").order("name")) || [];
   accounts = [];
   if (can("accounts.view")) { let ar = await db.from("credit_accounts").select("id,name,active,credit_limit,kra_pin").order("name"); if (ar.error) ar = await db.from("credit_accounts").select("id,name,active,credit_limit").order("name"); accounts = must(ar) || []; }
@@ -1784,7 +1897,7 @@ async function route() {
   if (nv && nv[2] && !can(nv[2]) && !(k === "suppliers")) { $("#view").innerHTML = `<h2>Not allowed</h2><p>Your role (${esc(roleName(me.role))}) does not include this page. Ask the owner if you need it.</p>`; return; }
   const decorate = () => { const h = document.querySelector("#view > h2"); if (h) { const w = document.createElement("div"); w.className = "pagehead"; w.innerHTML = BRAND.icon(k, 22); h.replaceWith(w); w.appendChild(h); } };
   try { if (k === "dashboard") await dashboard(); else if (k === "lists") await listsPage(); else if (k === "docs") await docsPage(); else if (k === "eod") await eodPage(); else if (k === "monthly") await monthlyPage(); else if (k === "summary") await summaryPage();
-    else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "equipment") await equipmentPage(); else if (k === "till") await tillPage(); else if (k === "wifi") await wifiPage(); else if (k === "vault") await vaultPage(); else if (k === "projects") await projectsPage(); else if (k === "policies") await policiesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
+    else if (k === "staffpay") await staffPayPage(); else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "equipment") await equipmentPage(); else if (k === "till") await tillPage(); else if (k === "wifi") await wifiPage(); else if (k === "vault") await vaultPage(); else if (k === "projects") await projectsPage(); else if (k === "policies") await policiesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
 }
 async function start() {
   const { data: { session } } = await db.auth.getSession();
