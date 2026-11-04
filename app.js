@@ -64,7 +64,7 @@ const T = {
       ["payment", "Payment method", "select:" + PAYX.join()], ["account_id", "Credit account (choose when payment is On account)", "account"], ["income_type", "Income type", "select:Repair,Electrical installation,CCTV installation,Other service,Landlord WiFi"], ["mpesa_ref", "M-Pesa code", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   expenses: { title: "Expenses", view: "expenses", perm: "expenses", table: "expenses", order: "spent_on",
     cols: [["spent_on", "Date"], ["description", "Description"], ["category", "Category"], ["amount", "Amount", "n"], ["payment", "Payment"], ["mpesa_ref", "M-Pesa code"], ["job_no", "Job No."]],
-    fields: [["spent_on", "Date", "date", { today: 1 }], ["description", "Description", "text", { full: 1 }], ["category", "Category", "select:Job materials,Labor / Technician,Transport / Logistics,Fuel,Rent,Utilities,Stock purchase,Airtime / Internet,Other"],
+    fields: [["spent_on", "Date", "date", { today: 1 }], ["description", "Description", "text", { full: 1 }], ["category", "Category", "select:Job materials,Labor / Technician,Transport / Logistics,Fuel,Rent,Utilities,Stock purchase,Airtime / Internet,Landlord WiFi - Bandwidth,Landlord WiFi - Hardware,Landlord WiFi - Electricity,Landlord WiFi - SMS,Landlord WiFi - Software & domain,Landlord WiFi - Other,Other"],
       ["amount", "Amount (KES)", "number", { req: 1 }], ["payment", "Payment method", "select:" + PAY.join()], ["mpesa_ref", "M-Pesa code", "text"], ["job_no", "Job No. (optional)", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   services: { title: "Printing & Cyber", view: "services", perm: "services", table: "services", order: "id", quick: 1,
     cols: [["done_on", "Date"], ["service", "Service"], ["customer", "Customer"], ["qty", "Qty", "n"], ["unit_price", "Price", "n"], ["total", "Total", "n"], ["payment", "Payment"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"]],
@@ -1196,10 +1196,25 @@ function parseCentipid(text, name) {
   return out;
 }
 const fmtBytes = b => { b = Number(b) || 0; return b >= 1e12 ? (b / 1e12).toFixed(2) + " TB" : b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : (b / 1e6).toFixed(0) + " MB"; };
+function wifiCosts(dayRows, wexp, MN) {
+  const isHw = x => /hardware$/i.test(x.category || ""), ms = {};
+  dayRows.forEach(r => { const o = ms[r.day.slice(0, 7)] = ms[r.day.slice(0, 7)] || { rev: 0, run: 0, hw: 0 }; o.rev += Number(r.revenue); });
+  const cats = {}; let totRun = 0, totHw = 0, totRev = 0;
+  wexp.forEach(x => { const m = x.spent_on.slice(0, 7), o = ms[m] = ms[m] || { rev: 0, run: 0, hw: 0 }, a = Number(x.amount); if (isHw(x)) { o.hw += a; totHw += a; } else { o.run += a; totRun += a; } const c = (x.category || "").replace(/^Landlord WiFi - ?/, "") || "Other"; cats[c] = (cats[c] || 0) + a; });
+  Object.values(ms).forEach(o => totRev += o.rev);
+  const keys = Object.keys(ms).sort().reverse();
+  if (!keys.length) return "";
+  const pct = (a, b) => b > 0 ? Math.round(a / b * 100) + "%" : "";
+  return `<h3>Costs and profit</h3><p style="color:var(--mut);margin-top:0"><small>From Expenses with a category starting <b>Landlord WiFi</b>. Running costs are bandwidth, electricity, SMS, software and anything else. <b>Hardware</b> (routers, cable) is equipment you keep, so it is shown on its own.</small></p>
+    <div class="wrap"><table><thead><tr><th>Month</th><th>Revenue</th><th>Running costs</th><th>Profit before hardware</th><th>Margin</th><th>Hardware</th><th>After hardware</th></tr></thead><tbody>${keys.map(m => { const o = ms[m]; return `<tr><td><b>${MN[Number(m.slice(5))]} ${m.slice(0, 4)}</b></td><td class="n">${kes(o.rev)}</td><td class="n">${kes(o.run)}</td><td class="n">${kes(o.rev - o.run)}</td><td>${pct(o.rev - o.run, o.rev)}</td><td class="n">${kes(o.hw)}</td><td class="n">${kes(o.rev - o.run - o.hw)}</td></tr>`; }).join("")}
+    <tr><td><b>Total</b></td><td class="n"><b>${kes(totRev)}</b></td><td class="n"><b>${kes(totRun)}</b></td><td class="n"><b>${kes(totRev - totRun)}</b></td><td>${pct(totRev - totRun, totRev)}</td><td class="n"><b>${kes(totHw)}</b></td><td class="n"><b>${kes(totRev - totRun - totHw)}</b></td></tr></tbody></table></div>
+    <p style="color:var(--mut)"><small>Where the costs went: ${Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, v]) => esc(c) + " " + kes(v)).join(", ")}.</small></p>`;
+}
 async function wifiPage() {
   const dayRows = (must(await db.from("wifi_daily").select("*").order("day", { ascending: true }).limit(3000)) || []);
   const incRows = can("income.view") ? (must(await db.from("income").select("ref,amount").eq("income_type", "Landlord WiFi")) || []) : [];
   const posted = Object.fromEntries(incRows.map(r => [r.ref, Number(r.amount)]));
+  const wexp = can("expenses.view") ? (must(await db.from("expenses").select("spent_on,category,amount,description").like("category", "Landlord WiFi%").order("spent_on", { ascending: true }).limit(2000)) || []) : null;
   const months = {}; dayRows.forEach(r => { const m = r.day.slice(0, 7), o = months[m] = months[m] || { rev: 0, bytes: 0, days: 0, paying: 0 }; o.rev += Number(r.revenue); o.bytes += Number(r.bytes); o.days++; if (Number(r.revenue) > 0) o.paying++; });
   const keys = Object.keys(months).sort().reverse(), can_ = can("income.add"), MN = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const last = dayRows.slice(-14).reverse();
@@ -1207,6 +1222,7 @@ async function wifiPage() {
     ${can_ ? `<div class="card" style="margin:10px 0"><label>Centipid report(s) (CSV, you may choose several)<input type="file" id="wf" accept=".csv,text/csv" multiple></label><div id="wprev"></div></div>` : ""}
     <h3>Months</h3><div class="wrap"><table><thead><tr><th>Month</th><th>Revenue (KES)</th><th>Data used</th><th>Days saved</th><th>KES per GB</th><th>In your Income</th><th></th></tr></thead><tbody id="wtb">${keys.map(m => { const o = months[m], ref = "WIFI-" + m, inc = posted[ref], gb = o.bytes / 1e9, st = inc == null ? `<span class="tag draft">Not added</span>` : inc === o.rev ? `<span class="tag ok">KES ${kes(inc)}</span>` : `<span class="tag bad">KES ${kes(inc)} (differs)</span>`;
       return `<tr><td><b>${MN[Number(m.slice(5))]} ${m.slice(0, 4)}</b></td><td class="n">${kes(o.rev)}</td><td>${fmtBytes(o.bytes)}</td><td>${o.days}</td><td class="n">${gb > 0 ? (o.rev / gb).toFixed(2) : ""}</td><td>${st}</td><td class="acts">${can_ && inc !== o.rev && o.rev > 0 ? `<button class="btn sm" data-m="${m}">${inc == null ? "Add to income" : "Update income"}</button>` : ""}</td></tr>`; }).join("") || `<tr><td colspan="7">Nothing yet. Upload a Centipid report above.</td></tr>`}</tbody></table></div>
+    ${wexp ? wifiCosts(dayRows, wexp, MN) : ""}
     ${last.length ? `<h3>Latest days</h3><div class="wrap"><table><thead><tr><th>Day</th><th>Revenue (KES)</th><th>Data used</th></tr></thead><tbody>${last.map(r => `<tr><td>${esc(r.day)}</td><td class="n">${kes(r.revenue)}</td><td>${fmtBytes(r.bytes)}</td></tr>`).join("")}</tbody></table></div>` : ""}
     <p style="color:var(--mut)"><small>The current month stays "open": upload a newer report later and press <b>Update income</b> to bring that month's income line up to date. A day's figure is only ever raised, so uploading an older file again is safe.</small></p>`;
   if ($("#wf")) $("#wf").onchange = async e => {
