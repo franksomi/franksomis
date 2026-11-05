@@ -252,6 +252,11 @@ async function openForm(key, row) {
       let id = row ? row.id : (Array.isArray(r.data) ? r.data[0]?.id : r.data?.id);
       if (id) { const c = await db.from(key === "inventory" ? "item_costs" : "sale_costs").upsert(key === "inventory" ? { item_id: id, unit_cost: costVal } : { sale_id: id, unit_cost: costVal }); if (c.error) toast(c.error.message); }
     }
+    if (key === "expenses" && !row && can("inventory.edit") && can("costs.view") && f.elements.category && f.elements.category.value === "Stock purchase") {
+      const nid = Array.isArray(r.data) ? r.data[0]?.id : r.data?.id; dlg.close(); toast("Saved"); route();
+      if (nid) { const ex = await db.from("expenses").select("*").eq("id", nid); if (ex.data && ex.data[0] && confirm("Update the inventory with what you bought now? (You can also do it later with “Post to stock”.)")) expenseStockDialog(ex.data[0]); }
+      return;
+    }
     dlg.close(); toast("Saved"); route();
   };
   f.querySelectorAll("[data-img]").forEach(inp => inp.onchange = async () => {
@@ -372,6 +377,7 @@ async function tablePage(key) {
     rows.forEach(r => { const x = m.get(r.id); r.alt = x ? [x.alt_name, x.alt_phone].filter(Boolean).join(" ") : ""; r.alt_name = x?.alt_name || null; r.alt_phone = x?.alt_phone || null; });
   }
   window.__rows = rows;
+  let stk = null; if (key === "expenses" && can("inventory.edit") && can("costs.view")) { stk = new Set(); try { const sp = await db.from("expense_stock").select("expense_id"); ((sp && sp.data) || []).forEach(x => stk.add(x.expense_id)); } catch (_) { stk = null; } }
   const cols = def.cols.filter(c => (c[3] !== "owner" || can("costs.view")) && (c[2] !== "acct" || can("accounts.view")));
   const head = cols.map(c => `<th>${esc(c[1])}</th>`).join("") + "<th></th>";
   const body = rows.map((r, i) => `<tr class="${r.status === "REORDER" ? "low" : ""}">${cols.map(([k, , t]) => {
@@ -381,6 +387,7 @@ async function tablePage(key) {
     return `<td class="${t === "n" ? "n" : ""}">${t === "n" ? kes(v) : t === "dt" ? esc(String(v || "").replace("T", " ").slice(0, 16)) : t === "yn" ? (v ? "Yes" : "") : t === "acct" ? esc(acctName(v)) : esc(v)}</td>`; }).join("")}
     <td>${pm(def, "edit") ? `<button class="btn sm" data-edit="${i}">Edit</button>` : ""} ${def.print ? `<button class="btn sm pbtn" data-print="${i}">Print card</button>` : ""}${key === "sales" && r.receipt_no ? `<button class="btn sm ghost" data-rcpt="${i}">Receipt</button>` : ""}
     ${def.margin && can("costs.view") ? `<button class="btn sm ghost" data-mg="${i}">Margin</button>` : ""}${((key === "repairs" && ["Ready for collection", "Collected"].includes(r.stage) && Number(r.balance_due) > 0) || (key === "jobs" && r.status === "Completed" && Number(r.balance) > 0)) && can("income.add") ? `<button class="btn sm" style="background:#12b76a" data-pi="${i}">Post income</button>` : ""}${key === "jobs" && r.status === "Completed" && can("projects.manage") ? `<button class="btn sm ghost" data-wp="${i}">Show on website</button>` : ""}${def.mpay && can("mpay.use") ? `<button class="btn sm" style="background:#12b76a" data-pay="${i}">M-Pesa</button>` : ""}${def.mpay === "repair" ? ` <button class="btn sm wabtn" data-wa="${i}">Send tracking link</button>` : ""}
+    ${stk && r.category === "Stock purchase" ? (stk.has(r.id) ? `<button class="btn sm ghost" data-stku="${i}" title="Take this purchase back out of the inventory">In stock · Undo</button>` : `<button class="btn sm ghost" data-stk="${i}">Post to stock</button>`) : ""}
     ${pm(def, "delete") ? `<button class="btn sm warn" data-del="${i}">Delete</button>` : ""}</td></tr>`).join("");
   if (def.quick) await refreshLookups();
   const quickBar = def.quick ? `<div class="bar" id="quick">${catalog.filter(c => c.active).map(c => `<button class="btn sm ghost" data-svc="${esc(c.name)}" title="KES ${c.default_price} per ${esc(c.unit)}">${esc(c.name.split(" (")[0])}</button>`).join("")}</div>` : "";
@@ -394,6 +401,8 @@ async function tablePage(key) {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.cp) return copyText(b.dataset.cp);
     if (b.dataset.rcpt) return printSaleReceipt(rows[b.dataset.rcpt]);
+    if (b.dataset.stk) return expenseStockDialog(rows[b.dataset.stk]);
+    if (b.dataset.stku) { if (!confirm("Take this purchase back out of the inventory? Quantities and unit costs go back as they were.")) return; const x = await db.rpc("expense_stock_undo", { p_expense_id: rows[b.dataset.stku].id }); if (x.error) return toast(x.error.message); toast("Taken out of the inventory"); return route(); }
     if (b.dataset.edit) openForm(key, rows[b.dataset.edit]);
     if (b.dataset.del && confirm("Delete this record? This cannot be undone.")) { const r = await db.from(def.table).delete().eq("id", rows[b.dataset.del].id); if (r.error) toast(r.error.message); else route(); }
     if (b.dataset.print) { let r = rows[b.dataset.print]; if (def.print === "jobcard") r = { ...r, ...(await repairChecks(r.id)), items: await repairItems(r.id) }; printCard(def.print, r); }
