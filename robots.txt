@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /app.html
+Disallow: /portal.html
+Disallow: /account.html
+Disallow: /checkout.html
+Disallow: /print.html
+Disallow: /track.html
+
+Sitemap: https://www.franksomi.com/sitemap.xml
