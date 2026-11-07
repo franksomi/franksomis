@@ -1,1 +1,7 @@
 
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/opnenrpt/public_html/
+    - /bin/cp -R about.html account.html app.html app.js app.webmanifest apple-touch-icon.png brand-circuit.svg brand.js checkout.html config.js contracts.js finance.js icon-192.png icon-512.png icon-maskable-512.png index.html invoices.js logo.png mpesa.js pdf.js policies.html policy.html portal.html portal.js pricecheck.js print.html print.js projects.html services.html shop.html site.webmanifest style.css sw.js till.js track.html web.css web.js xlsx.js media vendor $DEPLOYPATH
+
