@@ -117,7 +117,7 @@ function contractHtml(c, sched, value) {
   return head("SERVICE CONTRACT", n) + (draft ? `<p class="box"><b>DRAFT</b> – not yet in force</p>` : c.status === "Terminated" ? `<p class="box"><b>TERMINATED</b>${c.end_note ? ": " + esc(c.end_note) : ""}</p>` : "") +
     `<h2 style="margin:10px 0 2px">${esc(c.service === "ICT support contract" ? "ICT Support Contract" : c.service + " Contract")}</h2><p style="margin:0 0 8px"><b>${esc(c.client_name)}</b>${c.site ? " · " + esc(c.site) : ""} &nbsp;·&nbsp; Contract no. <b>${esc(n)}</b>${c.lpo_no ? " &nbsp;·&nbsp; Client LPO / PO no. " + esc(c.lpo_no) : ""}${c.quote_ref ? " &nbsp;·&nbsp; Our quotation " + esc(c.quote_ref) : ""}</p>` +
     `<p>This contract is made${c.signed_on ? " on <b>" + esc(ctDate(c.signed_on)) + "</b>" : ""} between:</p>
-     <p>(1) ${party(SHOP.name, SHOP.place + (SHOP.phone ? ", tel " + SHOP.phone : ""), "", c.our_rep, c.our_rep_title)} (<b>“Franksomi”</b>); and</p>
+     <p>(1) ${party(SHOP.name, SHOP.place + (SHOP.phone ? ", tel " + SHOP.phone : "") + (SHOP.web ? ", " + SHOP.web : ""), "", c.our_rep, c.our_rep_title)} (<b>“Franksomi”</b>); and</p>
      <p>(2) ${party(c.client_name, [c.client_address, c.client_contact].filter(Boolean).join(", "), c.client_pin, c.client_rep, c.client_rep_title)} (<b>“the Client”</b>).</p>
      <h3>1. Scope of the services</h3><p>${ctPre(c.scope)}</p>${itemsTbl}
      <h3>2. Period</h3><p>The contract starts on <b>${esc(ctDate(c.start_date))}</b> and ${rc ? "runs until" : "the work is to be completed by"} <b>${esc(ctDate(c.end_date))}</b>.</p>
