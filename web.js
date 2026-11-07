@@ -1,7 +1,7 @@
 "use strict";
 // Shared code for the public website and online shop: header, footer, cart, product cards, database connection.
 (function (root) {
-  const W = { name: "Franksomi Solution Ltd", phone: "0711 952 924", tel: "+254711952924", wa: "254711952924", email: "franksomi@gmail.com", web: "www.franksomi.com", tagline: "For Quality Solutions in Tech" };
+  const W = { name: "Franksomi Solution Ltd", phone: "0711 952 924", tel: "+254711952924", wa: "254711952924", email: "franksomi@gmail.com", web: "www.franksomi.com", addr: "Meru-Maua Rd, Meru", google: "https://share.google/K3MOh3uD9Yg3E8Lst", tagline: "For Quality Solutions in Tech" };
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const kes = v => "KES " + Number(v || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 });
   const waLink = msg => "https://wa.me/" + W.wa + (msg ? "?text=" + encodeURIComponent(msg) : "");
@@ -70,6 +70,23 @@
 
   // ---- header, footer, cart drawer ----
   const NAV = [["index.html", "Home"], ["services.html", "Services"], ["about.html", "About"], ["shop.html", "Shop"], ["track.html", "Track my order"], ["https://franksomiwifi.com/buy/packages", "Buy WiFi"], ["index.html#contact", "Contact"]];
+  // ---- opening hours (set in the staff app: Website text & hours). Shown wherever an element has data-hours, and added to the page's search-engine data.
+  const T12 = t => { const [h, m] = String(t).split(":").map(Number), ap = h < 12 ? "am" : "pm", hh = h % 12 || 12; return hh + (m ? ":" + String(m).padStart(2, "0") : "") + " " + ap; };
+  const DN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], DFULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  function hoursText(rows) {   // "Mon–Fri 8 am – 6 pm · Sat 9 am – 4:30 pm · Sun closed"
+    const by = {}; (rows || []).forEach(r => by[r.day] = r); const parts = []; let i = 1;
+    const key = r => !r ? "-" : r.closed ? "closed" : r.opens + "-" + r.closes;
+    while (i <= 7) { if (!by[i]) { i++; continue; } let j = i; while (j < 7 && by[j + 1] && key(by[j + 1]) === key(by[i])) j++;
+      parts.push((i === j ? DN[i - 1] : DN[i - 1] + "–" + DN[j - 1]) + " " + (by[i].closed ? "closed" : T12(by[i].opens) + " – " + T12(by[i].closes))); i = j + 1; }
+    return parts.join(" · ");
+  }
+  function hoursInit() {
+    if (!db) return; let q; try { q = Promise.resolve(db.rpc("site_hours")); } catch (_) { return; } q.then(r => { const rows = r && r.data; if (!Array.isArray(rows) || !rows.length) return;
+      const t = hoursText(rows); document.querySelectorAll("[data-hours]").forEach(el => { el.textContent = "Open: " + t; });
+      document.querySelectorAll('script[type="application/ld+json"]').forEach(s => { try { const j = JSON.parse(s.textContent); if (j["@type"] !== "LocalBusiness") return;
+        j.openingHoursSpecification = rows.filter(x => !x.closed).map(x => ({ "@type": "OpeningHoursSpecification", dayOfWeek: DFULL[x.day - 1], opens: x.opens, closes: x.closes })); s.textContent = JSON.stringify(j); } catch (_) {} });
+    }).catch(() => {});
+  }
   function chrome(active) {
     const hd = $("#siteHeader"); if (hd) hd.outerHTML = `<header class="top"><div class="wrap"><a class="brand" href="index.html"><img src="media/emblem.png" alt="" width="42" height="42"><span>Franksomi Solution Ltd<small>${W.tagline}</small></span></a>
       <a class="cartmini" href="#" data-cart aria-label="Open cart">Cart <b data-count>0</b></a><button class="burger" aria-label="Menu" aria-expanded="false">☰</button>
@@ -78,11 +95,12 @@
       <p style="margin-top:14px">Phones, laptops, CCTV, electrical, Landlord WiFi, printing and cyber. Fixed right. Tracked live.</p></div>
       <div><h4>Visit the website</h4><a href="services.html">Services</a><a href="about.html">About us</a><a href="projects.html">Our projects</a><a href="policies.html">Policies</a><a href="account.html">My account (credit customers)</a><a href="shop.html">Online shop</a><a href="track.html">Track an order or repair</a><a href="index.html#contact">Request a quote</a></div>
       <div><h4>Landlord WiFi</h4><a href="https://franksomiwifi.com/buy/packages" target="_blank" rel="noopener">Buy a hotspot package</a><a href="https://franksomiwifi.com/portal/login" target="_blank" rel="noopener">Customer portal login</a></div>
-      <div><h4>Talk to us</h4><a href="tel:${W.tel}">Call ${W.phone}</a><a href="${waLink("Hello Franksomi, ")}" target="_blank" rel="noopener">WhatsApp ${W.phone}</a><a href="mailto:${W.email}">${W.email}</a><a href="https://${W.web}">${W.web}</a><span>Kenya</span></div>
+      <div><h4>Talk to us</h4><a href="tel:${W.tel}">Call ${W.phone}</a><a href="${waLink("Hello Franksomi, ")}" target="_blank" rel="noopener">WhatsApp ${W.phone}</a><a href="mailto:${W.email}">${W.email}</a><a href="https://${W.web}">${W.web}</a><span>${W.addr}, Kenya</span><span data-hours></span><a href="${W.google}" target="_blank" rel="noopener">Find us on Google</a></div>
       <div><h4>Pay safely</h4><span>M-Pesa prompt to your phone, or pay on delivery / pickup. A receipt every time.</span></div></div>
       <div class="copy"><span>© ${new Date().getFullYear()} Franksomi Solution Ltd. All rights reserved.</span><a href="app.html" style="display:inline">Staff sign-in</a></div></div></footer>
       <a class="wa" href="${waLink("Hello Franksomi, ")}" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">${svgIcon("phone", 20)} <span>WhatsApp</span></a>
       <div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Your cart"><div class="bg" data-close></div><div class="panel"><header><h3>Your cart</h3><button class="btn sm line" data-close style="color:var(--txt)" type="button">Close</button></header><div class="lines" id="cartLines"></div><footer id="cartFoot"></footer></div></div>`;
+    hoursInit();
     const b = $(".burger"); if (b) b.onclick = () => { const n = $(".nav"); const o = n.classList.toggle("open"); b.setAttribute("aria-expanded", o); };
     document.addEventListener("click", e => {
       const c = e.target.closest("[data-cart]"); if (c) { e.preventDefault(); openCart(); }
