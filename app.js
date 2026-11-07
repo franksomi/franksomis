@@ -2,7 +2,7 @@
 const $ = (s, r = document) => r.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const kes = v => v === null || v === undefined || v === "" ? "" : Number(v).toLocaleString("en-KE", { maximumFractionDigits: 2 });
-const SHOP = { name: "Franksomi Solution Ltd", phone: "0711 952 924", email: "franksomi@gmail.com", place: "Kenya" };
+const SHOP = { name: "Franksomi Solution Ltd", phone: "0711 952 924", email: "franksomi@gmail.com", web: "www.franksomi.com", place: "Kenya" };
 const db = window.__MOCK_DB__ || supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_ANON_KEY);
 let catalog = [];
 const ROLES = [
@@ -679,7 +679,7 @@ function statementHtml(s) {
     <tr><td></td><td><i>Balance brought forward</i></td><td></td><td></td><td>${kes(s.opening)}</td></tr>${s.lines.map(l => `<tr><td>${esc(l.date)}</td><td>${esc([l.ref, l.description, l.kind === "payment" ? (l.method || "") + (l.mpesa_ref ? " " + l.mpesa_ref : "") : ""].filter(Boolean).join(" · "))}</td>
     <td>${l.amount > 0 ? kes(l.amount) : ""}</td><td>${l.amount < 0 ? kes(-l.amount) : ""}</td><td>${kes(l.balance)}</td></tr>`).join("")}
     <tr><th colspan="2" align="right">Totals for the period</th><th>${kes(s.charges)}</th><th>${kes(s.payments)}</th><th></th></tr><tr><th colspan="4" align="right">BALANCE DUE (KES)</th><th>${kes(s.closing)}</th></tr></tbody></table>
-    <p>Please pay by M-Pesa or at our shop and quote ${esc(a.acc_no)}. Questions? Call ${SHOP.phone}. Thank you for your business.</p>`;
+    <p>Please pay by M-Pesa or at our shop and quote ${esc(a.acc_no)}. Questions? Call ${SHOP.phone} or visit ${SHOP.web}. Thank you for your business.</p>`;
 }
 
 // ---- live chat with website visitors ---------------------------------------------------------
@@ -1467,7 +1467,7 @@ function docPrintHtml(r) {
 }
 
 // ---- printable cards ----------------------------------------------------------
-const head = (title, no) => `<h1><span><img src="logo.png" alt="" height="30" style="vertical-align:middle;margin-right:8px;background:#fff;border-radius:4px;padding:2px">${SHOP.name.toUpperCase()}</span><span>${title}</span></h1><p>Repairs · Sales · Installations | ${SHOP.place} | Tel: ${SHOP.phone} | ${SHOP.email}${no ? ` | <b>${esc(no)}</b>` : ""}</p>`;
+const head = (title, no) => `<h1><span><img src="logo.png" alt="" height="30" style="vertical-align:middle;margin-right:8px;background:#fff;border-radius:4px;padding:2px">${SHOP.name.toUpperCase()}</span><span>${title}</span></h1><p>Repairs · Sales · Installations | ${SHOP.place} | Tel: ${SHOP.phone} | ${SHOP.email} | ${SHOP.web}${no ? ` | <b>${esc(no)}</b>` : ""}</p>`;
 const kv = (a) => `<table>${a.map(([k, v]) => `<tr><th style="width:30%">${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table>`;
 async function repairChecks(id) {
   const r = await db.from("repair_checks").select("*").eq("repair_id", id).limit(1);
@@ -1507,7 +1507,7 @@ function printCard(kind, r) {
 // ---- shared helpers for reports -------------------------------------------------
 // Opens the document in a NEW TAB (print.html) with Print and Download PDF buttons. If the browser blocks the new tab, it is shown on this page instead.
 function printHtml(html, filename = "Franksomi document.pdf") {
-  const body = `<div id="docbody">${html}<div class="docfoot"><img src="logo.png" alt="" height="26"><b>${BRAND.TAGLINE}</b><span>${SHOP.name} · ${SHOP.phone} · ${SHOP.email}</span></div><div class="doccopy">© ${new Date().getFullYear()} ${SHOP.name}. All rights reserved.</div></div>`;
+  const body = `<div id="docbody">${html}<div class="docfoot"><img src="logo.png" alt="" height="26"><b>${BRAND.TAGLINE}</b><span>${SHOP.name} · ${SHOP.phone} · ${SHOP.email} · ${SHOP.web}</span></div><div class="doccopy">© ${new Date().getFullYear()} ${SHOP.name}. All rights reserved.</div></div>`;
   let tab = null;
   try { localStorage.setItem("fk_print", JSON.stringify({ html: body, filename })); tab = window.open("print.html", "_blank"); } catch (_) { tab = null; }
   if (tab) return;

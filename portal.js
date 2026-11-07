@@ -36,7 +36,7 @@
     const isJob = r.kind === "job", steps = buildSteps(r.stage, r.updates, isJob ? "job" : "repair");
     const when = iso => new Date(iso).toLocaleString("en-KE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     const lastAt = {}; (r.updates || []).forEach(u => { if (!lastAt[u.stage] || u.at > lastAt[u.stage]) lastAt[u.stage] = u.at; });
-    $("#out").innerHTML = `<div id="statusdoc"><div class="pdfhead" style="display:flex;align-items:center;gap:10px;padding:6px 2px"><img src="logo.png" alt="" height="34"><div><b>Franksomi Solution Ltd</b><br><small>${isJob ? "Job status" : "Repair status"} · ${esc(new Date().toLocaleDateString("en-KE"))} · Tel 0711 952 924</small></div></div><div class="card"><small>Hello ${esc(r.first_name)} — ${esc(r.job_no)}</small><div class="big">${esc(r.stage)}</div><div>${esc(r.item)}</div>
+    $("#out").innerHTML = `<div id="statusdoc"><div class="pdfhead" style="display:flex;align-items:center;gap:10px;padding:6px 2px"><img src="logo.png" alt="" height="34"><div><b>Franksomi Solution Ltd</b><br><small>${isJob ? "Job status" : "Repair status"} · ${esc(new Date().toLocaleDateString("en-KE"))} · Tel 0711 952 924 · www.franksomi.com</small></div></div><div class="card"><small>Hello ${esc(r.first_name)} — ${esc(r.job_no)}</small><div class="big">${esc(r.stage)}</div><div>${esc(r.item)}</div>
       ${BRAND.track(steps)}
       <small>${isJob ? "Started" : "Received"} ${esc(r.received_on)}${r.returned_on ? (isJob ? " · completed " : " · collected ") + esc(r.returned_on) : ""}</small>
       ${r.note ? `<div class="note">${esc(r.note)}</div>` : ""}

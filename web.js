@@ -1,7 +1,7 @@
 "use strict";
 // Shared code for the public website and online shop: header, footer, cart, product cards, database connection.
 (function (root) {
-  const W = { name: "Franksomi Solution Ltd", phone: "0711 952 924", tel: "+254711952924", wa: "254711952924", email: "franksomi@gmail.com", tagline: "For Quality Solutions in Tech" };
+  const W = { name: "Franksomi Solution Ltd", phone: "0711 952 924", tel: "+254711952924", wa: "254711952924", email: "franksomi@gmail.com", web: "www.franksomi.com", tagline: "For Quality Solutions in Tech" };
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const kes = v => "KES " + Number(v || 0).toLocaleString("en-KE", { maximumFractionDigits: 0 });
   const waLink = msg => "https://wa.me/" + W.wa + (msg ? "?text=" + encodeURIComponent(msg) : "");
@@ -78,7 +78,7 @@
       <p style="margin-top:14px">Phones, laptops, CCTV, electrical, Landlord WiFi, printing and cyber. Fixed right. Tracked live.</p></div>
       <div><h4>Visit the website</h4><a href="services.html">Services</a><a href="about.html">About us</a><a href="projects.html">Our projects</a><a href="policies.html">Policies</a><a href="account.html">My account (credit customers)</a><a href="shop.html">Online shop</a><a href="track.html">Track an order or repair</a><a href="index.html#contact">Request a quote</a></div>
       <div><h4>Landlord WiFi</h4><a href="https://franksomiwifi.com/buy/packages" target="_blank" rel="noopener">Buy a hotspot package</a><a href="https://franksomiwifi.com/portal/login" target="_blank" rel="noopener">Customer portal login</a></div>
-      <div><h4>Talk to us</h4><a href="tel:${W.tel}">Call ${W.phone}</a><a href="${waLink("Hello Franksomi, ")}" target="_blank" rel="noopener">WhatsApp ${W.phone}</a><a href="mailto:${W.email}">${W.email}</a><span>Kenya</span></div>
+      <div><h4>Talk to us</h4><a href="tel:${W.tel}">Call ${W.phone}</a><a href="${waLink("Hello Franksomi, ")}" target="_blank" rel="noopener">WhatsApp ${W.phone}</a><a href="mailto:${W.email}">${W.email}</a><a href="https://${W.web}">${W.web}</a><span>Kenya</span></div>
       <div><h4>Pay safely</h4><span>M-Pesa prompt to your phone, or pay on delivery / pickup. A receipt every time.</span></div></div>
       <div class="copy"><span>© ${new Date().getFullYear()} Franksomi Solution Ltd. All rights reserved.</span><a href="app.html" style="display:inline">Staff sign-in</a></div></div></footer>
       <a class="wa" href="${waLink("Hello Franksomi, ")}" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">${svgIcon("phone", 20)} <span>WhatsApp</span></a>
