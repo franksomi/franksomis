@@ -432,7 +432,7 @@ async function ordersPage() {
   const sumItems = r => (by[r.id] || []).map(i => `${i.name} × ${Number(i.qty)}`).join(", ");
   const draw = () => {
     const q = ($("#oq") ? $("#oq").value : "").toLowerCase(), list = rows.filter(r => (filt === "all" || (filt === "open" ? open(r) : filt === "done" ? ["Delivered", "Collected"].includes(r.status) : r.status === "Cancelled")) && (!q || (orderNo(r.id) + r.customer_name + r.phone + sumItems(r)).toLowerCase().includes(q)));
-    $("#otb").innerHTML = list.map(r => `<tr><td><b>${orderNo(r.id)}</b></td><td>${esc(String(r.created_at).replace("T", " ").slice(0, 16))}</td><td>${esc(r.customer_name)}<br><small>${esc(r.phone)}</small></td><td><small>${esc(sumItems(r))}</small></td>
+    $("#otb").innerHTML = list.map(r => `<tr><td><b>${orderNo(r.id)}</b></td><td>${esc(String(r.created_at).replace("T", " ").slice(0, 16))}</td><td>${esc(r.customer_name)}${r.account_id ? ` <span class="tag imp">Account ACC-${String(r.account_id).padStart(4, "0")}</span>` : ""}<br><small>${esc(r.phone)}${r.lpo_no ? " · LPO " + esc(r.lpo_no) : ""}</small></td><td><small>${esc(sumItems(r))}</small></td>
       <td>${r.fulfil === "pickup" ? "Pickup" : esc(r.zone_name || "Delivery")}</td><td class="n">${kes(r.total)}</td><td class="n">${kes(r.paid)}</td><td><span class="tag ${r.status === "Cancelled" ? "bad" : open(r) ? "" : "ok"}">${esc(r.status)}</span></td>
       <td><button class="btn sm" data-open="${r.id}">Open</button></td></tr>`).join("") || `<tr><td colspan="9"><div class="empty">${BRAND.emptyArt(130)}No orders here yet.</div></td></tr>`;
     document.querySelectorAll("[data-of]").forEach(b => b.classList.toggle("ghost", b.dataset.of !== filt));
@@ -455,7 +455,7 @@ function orderDialog(o, items) {
     <div class="full wrap"><table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead><tbody>${items.map(i => `<tr><td>${esc(i.name)}</td><td class="n">${Number(i.qty)}</td><td class="n">${kes(i.unit_price)}</td><td class="n">${kes(i.qty * i.unit_price)}</td></tr>`).join("")}
       <tr><td colspan="3">Delivery fee</td><td class="n">${kes(o.delivery_fee)}</td></tr><tr><td colspan="3"><b>Total</b></td><td class="n"><b>${kes(o.total)}</b></td></tr></tbody></table></div>
     <label>Paid so far (KES) <small>(M-Pesa prompts add themselves; type cash you received)</small><input name="paid" type="number" min="0" step="1" value="${Number(o.paid)}" ${canEdit && !done ? "" : "disabled"}></label>
-    <div style="align-self:end;padding-bottom:10px">Balance to collect: <b>${kes(bal)}</b> · ${o.pay_method === "mpesa_now" ? "customer chose M-Pesa now" : "customer pays on " + (o.fulfil === "pickup" ? "pickup" : "delivery")}</div>
+    <div style="align-self:end;padding-bottom:10px">${o.account_id ? `<b>Billed to credit account ACC-${String(o.account_id).padStart(4, "0")}</b>${o.lpo_no ? " · LPO " + esc(o.lpo_no) : ""}: nothing to collect. When you mark it ${o.fulfil === "pickup" ? "Collected" : "Delivered"} it is charged to the account.` : `Balance to collect: <b>${kes(bal)}</b> · ${o.pay_method === "mpesa_now" ? "customer chose M-Pesa now" : "customer pays on " + (o.fulfil === "pickup" ? "pickup" : "delivery")}`}</div>
     <label>Stage (customer sees this)<select name="status" ${dis}>${[...flow, "Cancelled"].map(s => `<option ${s === o.status ? "selected" : ""}>${s}</option>`).join("")}</select></label>
     <label>Message to customer (shown on the tracking page)<input name="customer_note" value="${esc(o.customer_note || "")}" ${dis}></label>
     ${o.fulfil === "delivery" ? `<label>Rider / courier name<input name="courier" value="${esc(o.courier || "")}" ${dis}></label><label>Rider / courier phone<input name="courier_phone" value="${esc(o.courier_phone || "")}" ${dis}></label><label class="full">Courier reference / waybill (optional)<input name="tracking_ref" value="${esc(o.tracking_ref || "")}" ${dis}></label>` : ""}
@@ -961,7 +961,7 @@ async function docForm(row, opts = {}) {
       <label>Type${revise ? `<input value="${esc(d.doc_type)}" disabled>` : `<select name="doc_type">${["Quotation", "Invoice", "Receipt"].map(x => `<option ${x === d.doc_type ? "selected" : ""}>${x}</option>`).join("")}</select>`}</label>
       <label>Date<input name="doc_date" type="date" value="${esc(d.doc_date || "")}"></label>
       ${d.doc_type === "Quotation" ? `<label>Valid until<input name="valid_until" type="date" value="${esc(d.valid_until || plusDays(d.doc_date, 30))}"></label>` : ""}
-      ${inv && !revise && accts.length ? `<label class="full">Charge to a credit account (optional: puts the balance on the customer's monthly account when issued)<select name="account_id"><option value="">— not on account —</option>${accts.map(a => `<option value="${a.id}" ${String(a.id) === String(d.account_id) ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></label>` : ""}
+      ${(inv || d.doc_type === "Quotation") && !revise && accts.length ? `<label class="full">${inv ? "Charge to a credit account (optional: puts the balance on the customer's monthly account when issued)" : "For a credit account (optional: the customer sees this quotation on their My account page, and an invoice made from it is charged to the account)"}<select name="account_id"><option value="">— not on account —</option>${accts.map(a => `<option value="${a.id}" ${String(a.id) === String(d.account_id) ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></label>` : ""}
       <label>Customer<input name="customer" value="${esc(d.customer)}" required></label><label>Customer KRA PIN<input name="customer_pin" value="${esc(d.customer_pin || "")}" maxlength="11" placeholder="e.g. P051234567Z" autocomplete="off"></label>
       <label>Contact<input name="contact" value="${esc(d.contact)}"></label><label>Client LPO / PO number<input name="lpo_no" value="${esc(d.lpo_no || "")}" placeholder="e.g. P-ORD_17448" autocomplete="off"></label>
       <label class="full">Address / site<input name="address" value="${esc(d.address)}"></label><label class="full">Reference (job no., project…)<input name="reference" value="${esc(d.reference)}"></label>
@@ -996,7 +996,7 @@ async function docForm(row, opts = {}) {
     }
     if (act === "issue" && !items.length) return toast("Add at least one item first.");
     const payload = { doc_type: d.doc_type, doc_date: d.doc_date, valid_until: d.doc_type === "Quotation" ? d.valid_until || null : null, customer: d.customer, customer_pin: d.customer_pin, contact: d.contact, lpo_no: d.lpo_no, address: d.address, reference: d.reference,
-      discount: d.discount || 0, paid_before: d.doc_type === "Quotation" ? 0 : d.paid_before || 0, items: act === "issue" ? items : d.items, account_id: d.doc_type === "Invoice" ? d.account_id || null : null };
+      discount: d.discount || 0, paid_before: d.doc_type === "Quotation" ? 0 : d.paid_before || 0, items: act === "issue" ? items : d.items, account_id: d.doc_type === "Invoice" || d.doc_type === "Quotation" ? d.account_id || null : null };
     if (!payload.doc_date) delete payload.doc_date;
     const r = row ? await db.from("documents").update(payload).eq("id", row.id).select("id") : await db.from("documents").insert(payload).select("id");
     if (r.error) return toast(r.error.message);
@@ -1219,7 +1219,7 @@ async function projectDialog(job, p, after) {
 async function policiesPage() {
   const rows = must(await db.from("site_policies").select("*")) || [], order = ["customer-service", "warranty-returns", "anti-bribery"];
   rows.sort((a, b) => order.indexOf(a.slug) - order.indexOf(b.slug));
-  let hrs = []; try { const h = await db.rpc("site_hours"); hrs = (h.data && !h.error) ? h.data : []; } catch (_) { hrs = []; }
+  let hrs = []; try { const h = await db.rpc("site_hours"); hrs = (Array.isArray(h.data) && !h.error) ? h.data : []; } catch (_) { hrs = []; }
   const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], hv = d => hrs.find(x => x.day === d) || null;
   const hoursCard = `<form class="card" id="hoursForm" style="margin-bottom:18px"><h3 style="margin-top:0">Opening hours</h3><p style="color:var(--mut);margin-top:0">Shown on every page of the website, and given to Google in the website's search data. Leave a day with no times and not ticked “Closed” only if you want it left out.</p>
     <table><tbody>${DAYS.map((n, i) => { const v = hv(i + 1); return `<tr><td style="width:110px"><b>${n}</b></td><td><label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" name="c${i + 1}" ${v && v.closed ? "checked" : ""} style="width:auto"> Closed</label></td><td><input type="time" name="o${i + 1}" value="${v && !v.closed ? v.opens : ""}"></td><td>to</td><td><input type="time" name="x${i + 1}" value="${v && !v.closed ? v.closes : ""}"></td></tr>`; }).join("")}</tbody></table>
