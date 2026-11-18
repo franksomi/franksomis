@@ -1,6 +1,6 @@
 // Franksomi: lets the site install as an app and open the page shell when the network is slow.
 // Network first: you always get the newest files when online. Data requests (Supabase etc.) are never cached.
-const CACHE = "franksomi-shell-v1";
+const CACHE = "franksomi-shell-v35";
 self.addEventListener("install", e => { self.skipWaiting(); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {
