@@ -62,7 +62,7 @@
     try{sessionStorage.setItem("fk_tp",phone)}catch(_){}
     if(pay==="mpesa_now"){var ps=$("#pstate");ps.innerHTML='<p class="msg" id="pm" role="status"></p><button class="btn green" id="paybtn" type="button" hidden>Try the M-Pesa prompt again</button>';
       async function go(){$("#paybtn").hidden=true;var res=await WEB.payOrder(d.order_no,phone,d.total,function(t){$("#pm").className="msg";$("#pm").textContent=t});
-        if(res.ok){$("#pm").className="msg ok";$("#pm").textContent=res.review?"We received your payment and will confirm it shortly. Thank you!":"Payment received"+(res.receipt?" ("+res.receipt+")":"")+". Thank you!"}
+        if(res.ok){$("#pm").className="msg ok";$("#pm").textContent=res.review?"We received your payment and will confirm it shortly. Thank you!":"Payment received"+(res.receipt?" ("+res.receipt+")":"")+". Thank you!";if(!res.review)WEB.receipt.attach($("#pm"),res.id)}
         else{$("#pm").className="msg bad";$("#pm").textContent=res.message+" Your order is saved. You can also pay on delivery.";$("#paybtn").hidden=false}}
       $("#paybtn").onclick=go;go()}
     else $("#pstate").innerHTML='<p class="msg ok">You will pay when your order arrives.</p>'}

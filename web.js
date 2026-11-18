@@ -210,13 +210,38 @@
       await new Promise(r => setTimeout(r, root.__POLL_MS__ || 3000));
       if (i === 14) await db.functions.invoke("stk-push", { body: { action: "check", public_id: id } });
       const s = await db.rpc("pay_status", { p_public: id }); const st = s.data && s.data.status;
-      if (st === "Success") return { ok: true, receipt: s.data.receipt };
+      if (st === "Success") return { ok: true, receipt: s.data.receipt, id };
       if (st === "Cancelled" || st === "Failed") return { ok: false, message: (s.data.message || "The payment did not go through.") + " You can try again." };
       if (st === "Review") return { ok: true, review: true };
     }
     return { ok: false, message: "We did not get a reply yet. If money left your M-Pesa, we will confirm it shortly. You can check again from the tracking page." };
   }
 
-  const api = { W, esc, kes, waLink, $, db, configured: !!db, svgIcon, iconFor, art, picture, products, card, cart, cartLines, chrome, openCart, showProduct, wireProducts, payOrder, safe };
+  // Receipt a customer can save or print after an M-Pesa payment is complete (data comes from pay_receipt, which only answers for a successful payment)
+  const receipt = {
+    async get(id) { try { const r = await db.rpc("pay_receipt", { p_public: id }); return r.data && r.data.ok ? r.data : null; } catch (_) { return null; } },
+    html(r) {
+      const n2 = v => Number(v || 0).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const when = r.paid_at ? new Date(r.paid_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi", dateStyle: "medium", timeStyle: "short" }) : "";
+      const row = (k, v) => v ? `<tr><th style="width:34%">${esc(k)}</th><td>${esc(v)}</td></tr>` : "";
+      return `<h1 style="display:flex;justify-content:space-between;gap:12px"><span><img src="logo.png" alt="" height="30" style="vertical-align:middle;margin-right:8px;background:#fff;border-radius:4px;padding:2px">FRANKSOMI SOLUTION LTD</span><span>PAYMENT RECEIPT</span></h1><p>Tel: ${esc(W.phone)} | ${esc(W.email)} | ${esc(W.web)} | ${esc(W.addr)}, Kenya</p>
+        <table>${row("Receipt no.", r.receipt_no)}${row("Date", when)}${row("Received from", r.phone)}${row("For", [r.ref, r.purpose].filter(Boolean).join(" · "))}${row("Paid by", "M-Pesa")}${row("M-Pesa code", r.mpesa_receipt)}
+        <tr><th>Amount received (KES)</th><td><b style="font-size:18px">${n2(r.amount)}</b></td></tr></table>
+        <p>Thank you for your payment. This receipt confirms money received by ${esc(W.name)}. Keep it for your records.</p>`;
+    },
+    open(r) {
+      const body = '<div id="docbody">' + this.html(r) + '<div class="docfoot"><img src="logo.png" alt="" height="26"><b>' + esc(W.tagline) + '</b><span>' + esc(W.name) + ' · ' + esc(W.phone) + ' · ' + esc(W.email) + '</span></div><div class="doccopy">© ' + new Date().getFullYear() + ' ' + esc(W.name) + '. All rights reserved.</div></div>';
+      try { localStorage.setItem("fk_print", JSON.stringify({ html: body, filename: (r.receipt_no || "Receipt") + " Payment receipt.pdf" })); if (!window.open("print.html", "_blank")) throw 0; return true; } catch (_) { return false; }
+    },
+    // after a successful payment: fetch the receipt and put a "Download receipt" button after `el`
+    async attach(el, id) {
+      if (!el || !id) return; const r = await this.get(id); if (!r) return; const old = el.parentNode && el.parentNode.querySelector("[data-receipt]"); if (old) old.remove();
+      const b = document.createElement("button"); b.type = "button"; b.className = "btn line"; b.style.cssText = "margin-top:8px;color:var(--txt)"; b.textContent = "Download receipt"; b.setAttribute("data-receipt", r.receipt_no);
+      b.onclick = () => { if (!receipt.open(r)) { const m = document.createElement("p"); m.className = "msg bad"; m.textContent = "Your browser blocked the receipt window. Allow pop-ups for this site and try again."; b.after(m); } };
+      el.after(b);
+    }
+  };
+
+  const api = { receipt, W, esc, kes, waLink, $, db, configured: !!db, svgIcon, iconFor, art, picture, products, card, cart, cartLines, chrome, openCart, showProduct, wireProducts, payOrder, safe };
   root.WEB = api; if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
