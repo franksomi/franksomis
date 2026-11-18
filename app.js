@@ -366,6 +366,40 @@ function wireSaleSplit(f, isNew) {
   m.addEventListener("input", () => { c.value = String(Math.max(0, r2(total() - Number(m.value || 0)))); upd(); });
   f.addEventListener("input", e => { if (pay.isConnected && pay.value === "Split" && e.target !== c && e.target !== m) upd(); });
   pay.addEventListener("change", show); show();
+  if (isNew && f.elements.mpesa_ref) wireSalePrompt(f, pay, total);
+}
+// M-Pesa prompt inside the new-sale form: sends the STK prompt, waits for the customer's PIN, and fills in the M-Pesa code when paid
+function wireSalePrompt(f, pay, total) {
+  const codeLbl = f.elements.mpesa_ref.closest("label"); if (!codeLbl) return;
+  codeLbl.insertAdjacentHTML("afterend", `<div class="full" id="salePrompt" hidden style="border:1px solid var(--line,#ddd);border-radius:10px;padding:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end">
+    <label>Customer phone<input id="spPhone" inputmode="tel" placeholder="07XX XXX XXX"></label>
+    <label>Amount (KES)<input id="spAmt" type="number" min="1" step="1"></label>
+    <button type="button" class="btn" id="spSend" style="background:#12b76a">Send M-Pesa prompt</button>
+    <p id="spMsg" class="msg full" style="min-height:1.4em;margin:0;grid-column:1/-1"></p></div>`);
+  const box = f.querySelector("#salePrompt"), amt = f.querySelector("#spAmt"), msg = f.querySelector("#spMsg"), send = f.querySelector("#spSend"); let touched = false, busy = false;
+  const want = () => { let t = 0; try { t = total(); } catch (_) {} return Math.round(pay.value === "Split" ? Number((f.elements.mpesa_amt || {}).value || 0) : t); };
+  const show = () => { box.hidden = !(pay.value === "M-Pesa" || pay.value === "Split"); box.style.display = box.hidden ? "none" : "grid"; if (!touched && !box.hidden) amt.value = want() || ""; };
+  amt.addEventListener("input", () => { touched = true; });
+  f.addEventListener("input", e => { if (e.target !== amt && e.target.id !== "spPhone") show(); }); pay.addEventListener("change", show); show();
+  send.onclick = async () => {
+    if (busy) return; const phone = f.querySelector("#spPhone").value.trim(), n = Math.round(Number(amt.value || 0));
+    msg.style.color = ""; if (!phone) { msg.style.color = "#b42318"; msg.textContent = "Type the customer's phone number."; return; } if (!(n >= 1)) { msg.style.color = "#b42318"; msg.textContent = "Enter the amount to request."; return; }
+    busy = true; send.disabled = true; msg.textContent = "Sending…";
+    let provider; try { const p = await db.functions.invoke("stk-push", { body: { action: "providers" } }); provider = p.data && p.data.default; } catch (_) {}
+    const body = { phone, amount: n, ref: (f.elements.receipt_no && f.elements.receipt_no.value || "Sale").slice(0, 20), purpose: "Shop sale", auto_record: false, customer_name: f.elements.customer ? f.elements.customer.value : "" }; if (provider) body.provider = provider;
+    const res = await db.functions.invoke("stk-push", { body });
+    if (res.error || !res.data || !res.data.ok) { msg.style.color = "#b42318"; msg.textContent = await invokeErr(res); busy = false; send.disabled = false; return; }
+    msg.textContent = "Prompt sent. Ask the customer to check their phone and enter their PIN…"; const id = res.data.public_id;
+    for (let i = 0; i < 40; i++) {
+      await new Promise(r => setTimeout(r, window.__POLL_MS__ || 3000)); if (!f.isConnected) return;
+      if (i === 14) await db.functions.invoke("stk-push", { body: { action: "check", public_id: id } });
+      const q = await db.from("mpesa_requests").select("status,mpesa_receipt,result_desc").eq("public_id", id).single(); const r = q.data; if (!r) continue;
+      if (r.status === "Success") { msg.style.color = "#067647"; msg.textContent = "Paid ✓ KES " + kes(n) + (r.mpesa_receipt ? " · code " + r.mpesa_receipt + " filled in below" : ""); if (r.mpesa_receipt) f.elements.mpesa_ref.value = r.mpesa_receipt; busy = false; return; }
+      if (r.status === "Cancelled" || r.status === "Failed") { msg.style.color = "#b42318"; msg.textContent = (r.result_desc || "The payment did not go through.") + " You can send again."; busy = false; send.disabled = false; return; }
+      if (r.status === "Review") { msg.style.color = "#b54708"; msg.textContent = "Money received but the amount differs. Check M-Pesa checkout and your statement before saving."; busy = false; return; }
+    }
+    msg.textContent = "No reply yet. Press Send again, or check M-Pesa checkout."; busy = false; send.disabled = false;
+  };
 }
 
 // ---- table pages ------------------------------------------------------------
