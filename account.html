@@ -57,7 +57,7 @@ $("#prst").onclick=function(){openPrint(stHtml(),D.account.acc_no+" Statement.pd
 $("#out").onclick=function(){cur=null;D=null;$("#acct").hidden=true;$("#signin").hidden=false;$("#f").reset()};
 $("#pay").onclick=async function(){var b=this,m=$("#pm"),amt=Math.floor(Number($("#amt").value));if(!(amt>=1)){m.className="msg bad";m.textContent="Enter a whole amount in shillings.";return}
   b.disabled=true;m.className="msg";var r=await WEB.payOrder(D.account.acc_no,cur.phone,amt,function(t){m.className="msg";m.textContent=t});
-  if(r.ok){m.className="msg ok";m.textContent=r.review?"We received your payment and will confirm it shortly.":"Payment received. Thank you!";setTimeout(function(){lookup(cur.acc,cur.phone)},1500)}else{m.className="msg bad";m.textContent=r.message}b.disabled=false};
+  if(r.ok){m.className="msg ok";m.textContent=r.review?"We received your payment and will confirm it shortly.":"Payment received. Thank you!";if(!r.review)WEB.receipt.attach(m,r.id);setTimeout(function(){lookup(cur.acc,cur.phone)},1500)}else{m.className="msg bad";m.textContent=r.message}b.disabled=false};
 var q=new URLSearchParams(location.search).get("acc");if(q)$("#f").acc.value=q;
 })();</script>
 <script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>

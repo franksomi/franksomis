@@ -81,7 +81,7 @@
       await new Promise(r => setTimeout(r, root.__POLL_MS__ || 3000));
       if (i === 14) await db.functions.invoke("stk-push", { body: { action: "check", public_id: id } });
       const s = await db.rpc("pay_status", { p_public: id }); const st = s.data && s.data.status;
-      if (st === "Success") { m.className = "msg ok"; m.textContent = "Payment received" + (s.data.receipt ? " (" + s.data.receipt + ")" : "") + ". Thank you!"; await lookup(creds.job, creds.phone); return; }
+      if (st === "Success") { m.className = "msg ok"; m.textContent = "Payment received" + (s.data.receipt ? " (" + s.data.receipt + ")" : "") + ". Thank you!"; await lookup(creds.job, creds.phone); const h = document.createElement("div"); h.className = "noprint"; h.style.textAlign = "center"; h.innerHTML = "<span></span>"; $("#out").appendChild(h); if (root.WEB) WEB.receipt.attach(h.firstChild, id); return; }
       if (st === "Cancelled" || st === "Failed") { m.className = "msg bad"; m.textContent = (s.data.message || "The payment did not go through.") + " You can try again."; btn.disabled = false; return; }
       if (st === "Review") { m.textContent = "We received your payment and will confirm it shortly."; return; }
     }

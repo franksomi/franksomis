@@ -18,8 +18,8 @@
   const num = v => { const n = parseFloat(String(v ?? "").replace(/[,\sKESksh]/gi, "").replace(/^\((.*)\)$/, "-$1")); return isFinite(n) ? n : 0; };
   function parseTime(v) {
     v = String(v || "").trim(); let m;
-    if ((m = v.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/))) return `${m[1]}-${m[2]}-${m[3]}T${m[4].padStart(2, "0")}:${m[5]}:${m[6] || "00"}+03:00`;
-    if ((m = v.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/))) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}T${m[4].padStart(2, "0")}:${m[5]}:${m[6] || "00"}+03:00`;
+    if ((m = v.match(/^(\d{4})-(\d{2})-(\d{2})[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?/))) return `${m[1]}-${m[2]}-${m[3]}T${m[4].padStart(2, "0")}:${m[5]}:${m[6] || "00"}+03:00`;
+    if ((m = v.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?/))) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}T${m[4].padStart(2, "0")}:${m[5]}:${m[6] || "00"}+03:00`;
     if ((m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return `${m[1]}-${m[2]}-${m[3]}T12:00:00+03:00`;
     return null;
   }
@@ -72,6 +72,36 @@
     const stmtIn = txns.reduce((s, t) => s + (t.paid_in || 0), 0), stmtOut = txns.reduce((s, t) => s + (t.withdrawn || 0), 0);
     return { exact, suggested, ambiguous, unrecorded, missing, stmtIn, stmtOut, lo, hi };
   }
-  const api = { parseCsv, parseMpesa, parseTime, matchAll };
+  // Kopo Kopo reports. "Transactions report" = payments to your till or online account; "Payments report" = what Kopo Kopo paid out (settled) to your M-Pesa.
+  function parseK2(text) {
+    const rows = parseCsv(text), norm = c => String(c || "").trim().toLowerCase();
+    const idx = (h, name) => h.findIndex(c => norm(c) === name);
+    let hi = rows.findIndex(r => r.some(c => norm(c) === "reference id") && r.some(c => /^amount \(ksh\)$/.test(norm(c))));
+    if (hi >= 0) {
+      const h = rows[hi], c = { date: idx(h, "date"), ref: idx(h, "reference id"), sender: idx(h, "sender identifier"), name: idx(h, "name"), till: idx(h, "till no."), fee: idx(h, "fees (ksh)"), amt: idx(h, "amount (ksh)"), mm: idx(h, "mm system"), status: idx(h, "status") };
+      const out = [];
+      for (const r of rows.slice(hi + 1)) {
+        const ref = String(r[c.ref] || "").trim().toUpperCase(), amount = num(r[c.amt]), time = parseTime(r[c.date]);
+        if (!/^[A-Z0-9]{6,20}$/.test(ref) || !(amount > 0) || !time) continue;
+        if (c.status >= 0 && !/^complete/i.test(String(r[c.status] || "").trim())) continue;
+        out.push({ receipt: ref, time, amount, fee: num(r[c.fee]), till: String(r[c.till] || "").trim(), name: String(r[c.name] || "").trim().replace(/^not available$/i, ""), sender: String(r[c.sender] || "").trim(), channel: /online/i.test(r[c.mm] || "") ? "Online Payment" : "Till" });
+      }
+      return { kind: "payments", rows: out };
+    }
+    hi = rows.findIndex(r => r.some(c => norm(c) === "destination") && r.some(c => norm(c) === "reference") && r.some(c => /^amount \(ksh\)$/.test(norm(c))));
+    if (hi >= 0) {
+      const h = rows[hi], c = { date: idx(h, "date"), dest: idx(h, "destination"), amt: idx(h, "amount (ksh)"), ref: idx(h, "reference"), status: idx(h, "status") };
+      const out = [];
+      for (const r of rows.slice(hi + 1)) {
+        const ref = String(r[c.ref] || "").trim().toUpperCase(), amount = num(r[c.amt]), time = parseTime(r[c.date]);
+        if (!/^[A-Z0-9]{6,20}$/.test(ref) || !(amount > 0) || !time) continue;
+        if (c.status >= 0 && !/^transferred|^complete|^success/i.test(String(r[c.status] || "").trim())) continue;
+        out.push({ receipt: ref, time, amount, destination: String(r[c.dest] || "").trim(), status: "Transferred" });
+      }
+      return { kind: "settlements", rows: out };
+    }
+    throw new Error("This does not look like a Kopo Kopo report. Use the Transactions report or the Payments report from your Kopo Kopo account.");
+  }
+  const api = { parseCsv, parseMpesa, parseTime, matchAll, parseK2 };
   if (typeof module !== "undefined") module.exports = api; else root.Mpesa = api;
 })(typeof window !== "undefined" ? window : globalThis);
