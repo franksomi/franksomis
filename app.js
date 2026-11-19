@@ -38,11 +38,11 @@ const T = {
       ["part1_id", "Part used 1 (from stock)", "stock"], ["part1_qty", "Qty", "number"], ["part2_id", "Part used 2 (from stock)", "stock"], ["part2_qty", "Qty", "number"],
       ["labor_hours", "Labor hours", "number"], ["labor_cost", "Labor cost (KES)", "number"],
       ["deposit_received", "Refundable deposit received", "number"], ["deposit_payment", "Deposit paid by", "select:" + PAY.join()], ["deposit_mpesa_ref", "Deposit M-Pesa code", "text"], ["deposit_applied", "Deposit applied to bill", "number"], ["deposit_refunded", "Deposit refunded", "number"],
-      ["returned_on", "Date returned", "date"], ["remarks", "Remarks", "text", { full: 1 }]] },
+      ["returned_on", "Date returned", "date"], ["agent_code", "Referral code (if an agent brought this customer)", "text"], ["remarks", "Remarks", "text", { full: 1 }]] },
   sales: { title: "Sales", view: "sales_v", perm: "sales", table: "sales", order: "id",
     cols: [["sold_on", "Date"], ["receipt_no", "Receipt no.", "cp"], ["customer", "Customer"], ["item_name", "Item"], ["qty", "Qty", "n"], ["unit_cost", "Unit cost", "n", "owner"], ["unit_price", "Unit price", "n"],
       ["total_sales", "Total", "n"], ["profit", "Profit", "n", "owner"], ["payment", "Payment", "pay"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"]],
-    fields: [["receipt_no", "Receipt no. (made for you; the items of one sale share it)", "text"], ["sold_on", "Date", "date", { today: 1 }], ["customer", "Customer", "text"], ["item_id", "Item (pick from stock: name, category and price fill in)", "stock", { full: 1 }],
+    fields: [["receipt_no", "Receipt no. (made for you; the items of one sale share it)", "text"], ["sold_on", "Date", "date", { today: 1 }], ["customer", "Customer", "text"], ["cust_phone", "Customer phone (loyalty points go to this number)", "text"], ["agent_code", "Referral code (if an agent brought this customer)", "text"], ["item_id", "Item (pick from stock: name, category and price fill in)", "stock", { full: 1 }],
       ["category", "Category", "list:stock_type"], ["qty", "Qty", "number", { req: 1 }], ["unit_price", "Unit price (KES)", "number", { req: 1 }],
       ["payment", "Payment method", "select:" + PAYX.join() + ",Split"], ["cash_amt", "Cash part (KES)", "number"], ["mpesa_amt", "M-Pesa part (KES)", "number"], ["account_id", "Credit account (choose when payment is On account)", "account"], ["mpesa_ref", "M-Pesa code (if paid by M-Pesa)", "text"], ["cost_new", "Unit cost for an item not in stock (KES)", "number", { owner: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
   inventory: { title: "Inventory", view: "v_stock", perm: "inventory", table: "inventory_items", order: "code",
@@ -57,7 +57,7 @@ const T = {
     fields: [["started_on", "Date started", "date", { today: 1 }], ["client_name", "Client name", "text", { req: 1 }], ["contact", "Contact", "text"], ["site", "Site / location", "text"],
       ["job_type", "Job type", "select:Electrical installation,CCTV installation,Networking,Electrical repair,CCTV repair,Transport / logistics,Other"],
       ["contract_price", "Contract price (KES)", "number"], ["status", "Stage (customer sees this)", "select:Booked,Site visit,Quote sent,Waiting for materials,In progress,Testing,On hold,Completed", { def: "Booked" }], ["completed_on", "Date completed", "date"],
-      ["customer_note", "Message to customer (shown on the tracking page)", "text", { full: 1 }], ["sms_optout", "Do NOT send this customer SMS updates", "check"], ["scope", "Scope of work", "text", { full: 1 }], ["remarks", "Remarks (private)", "text", { full: 1 }]] },
+      ["customer_note", "Message to customer (shown on the tracking page)", "text", { full: 1 }], ["sms_optout", "Do NOT send this customer SMS updates", "check"], ["agent_code", "Referral code (if an agent brought this customer)", "text"], ["scope", "Scope of work", "text", { full: 1 }], ["remarks", "Remarks (private)", "text", { full: 1 }]] },
   income: { title: "Income", view: "income", perm: "income", table: "income", order: "received_on",
     cols: [["received_on", "Date"], ["ref", "Customer ID / Job No."], ["description", "Description"], ["amount", "Amount", "n"], ["payment", "Payment"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"], ["income_type", "Type"]],
     fields: [["received_on", "Date", "date", { today: 1 }], ["ref", "Customer ID / Job No.", "text"], ["description", "Service description", "text", { full: 1 }], ["amount", "Amount (KES)", "number", { req: 1 }],
@@ -172,6 +172,8 @@ async function openForm(key, row) {
   const def = T[key];
   await refreshLookups();
   if (key === "repairs" && row) row = { ...row, ...(await repairChecks(row.id)) };
+  const LEAD = { sales: "sale", repairs: "repair", jobs: "job" }[key];
+  if (LEAD && row) { let lr = null; try { const lq = await db.from("lead_links").select("code,phone").eq("source", LEAD).eq("source_id", row.id).limit(1); lr = lq.data && (Array.isArray(lq.data) ? lq.data[0] : lq.data); } catch (_) {} row = { ...row, agent_code: lr && lr.code || "", cust_phone: lr && lr.phone ? "0" + lr.phone.slice(3) : "" }; }
   const oldItems = key === "repairs" && row ? await repairItems(row.id) : [];
   const dlg = $("#dlg"), f = $("#dlgForm");
   f.innerHTML = `<h2>${row ? "Edit" : "New"} – ${esc(def.title)}</h2><div class="grid">${def.fields.map(fd => widget(fd, row && row[fd[0]])).join("")}</div>
@@ -191,6 +193,10 @@ async function openForm(key, row) {
     const data = readForm(f, def.fields);
     const xl = (key === "sales" && !row) || key === "repairs" ? readLines(f) : { lines: [] };
     if (xl.error) return toast(xl.error);
+    const leadCode = (data.agent_code || "").trim().toUpperCase().replace(/\s+/g, ""), leadPhone = (data.cust_phone || "").trim();
+    delete data.agent_code; delete data.cust_phone;
+    const leadWas = row ? { code: (row.agent_code || "").toUpperCase(), phone: row.cust_phone || "" } : { code: "", phone: "" }, leadChanged = leadCode !== leadWas.code || (key === "sales" && leadPhone !== leadWas.phone);
+    if (LEAD && leadCode && leadChanged) { const ck = await db.rpc("agent_code_ok", { p_code: leadCode }); if (ck.error || !ck.data) return toast("The referral code " + leadCode + " is not an active agent's code. Check it, or clear the box."); }
     const checks = key === "repairs" ? { left_with: data.left_with || [], condition: data.condition || [] } : null;
     const alt = key === "repairs" ? { alt_name: data.alt_name || null, alt_phone: data.alt_phone || null } : null;
     if (checks) { delete data.left_with; delete data.condition; delete data.alt_name; delete data.alt_phone; }
@@ -228,6 +234,10 @@ async function openForm(key, row) {
     const q = row ? db.from(def.table).update(data).eq("id", row.id).select("id") : db.from(def.table).insert(payload).select("id");
     const r = await q; if (r.error) return toast(r.error.message);
     if (row && (!r.data || !r.data.length)) return toast("You can't change this record. Staff can fix only their own entries, within a day.");
+    if (LEAD && leadChanged) {
+      const ids = row ? [row.id] : (Array.isArray(r.data) ? r.data.map(x => x.id) : [r.data && r.data.id]).filter(Boolean);
+      for (const id of ids) { const la = await db.rpc("lead_attach", { p_source: LEAD, p_id: id, p_code: leadCode || null, p_phone: key === "sales" ? (leadPhone || null) : null }); if (la.error) { toast("Saved, but the referral code / phone was not: " + la.error.message); dlg.close(); route(); return; } }
+    }
     if (checks) {
       const rid = row ? row.id : (Array.isArray(r.data) ? r.data[0]?.id : r.data?.id);
       if (rid) { const c = await db.from("repair_checks").upsert({ repair_id: rid, ...checks, updated_at: new Date().toISOString() }); if (c.error) return toast("Saved, but the checklist was not: " + c.error.message); }
@@ -343,6 +353,14 @@ function copyText(txt) {
   if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(ok, old); else old();
 }
 // ---- sales: one receipt for the items of a sale, with cash + M-Pesa split ----
+// the loyalty line on a receipt: points earned on this sale, and the customer's balance
+async function loyaltyHtml(ref, phone) {
+  try {
+    if (!phone) return ""; const q = await db.rpc("loyalty_for_ref", { p_ref: ref, p_phone: phone }); const d = q.data; if (!d || !d.on || !d.phone) return "";
+    const bal = Number(d.balance || 0), earn = Number(d.earned || 0); if (!bal && !earn) return "";
+    return `<p class="box"><b>Loyalty points</b>${earn > 0 ? ` &nbsp; earned on this sale: <b>+${earn}</b>` : ""} &nbsp; balance: <b>${bal}</b> point${bal === 1 ? "" : "s"} (worth KES ${kes(bal * Number(d.value_kes || 1))})<br><small>You earn 1 point for every KES ${kes(d.earn_kes)} when a sale, repair or job is complete and paid. Ask to redeem your points on your next visit.</small></p>`;
+  } catch (_) { return ""; }
+}
 async function printSaleReceipt(r) {
   const q = await db.from("sales_v").select("*").eq("receipt_no", r.receipt_no).order("id", { ascending: true }); if (q.error) return toast(q.error.message);
   const ls = q.data || [r]; await loadCompany();
@@ -351,6 +369,7 @@ async function printSaleReceipt(r) {
   const codes = [...new Set(ls.map(x => x.mpesa_ref).filter(Boolean))].join(", ");
   const paid = [cash > 0 ? "Cash " + kes(cash) : "", mp > 0 ? "M-Pesa " + kes(mp) + (codes ? " (" + codes + ")" : "") : "", bank > 0 ? "Bank " + kes(bank) : "", acct > 0 ? "On account " + kes(acct) : ""].filter(Boolean).join(" + ");
   const doc = { doc_type: "Receipt", doc_no: r.receipt_no, customer: ls[0].customer || "Walk-in customer", doc_date: ls[0].sold_on, reference: paid ? "Paid: " + paid : "", items: ls.map(x => ({ desc: x.item_name || "Item", qty: Number(x.qty), price: Number(x.unit_price) })), discount: 0, vat_rate: 0, paid_before: total - acct, status: "Issued" };
+  try { const lk = await db.from("lead_links").select("phone").eq("source", "sale").in("source_id", ls.map(x => x.id)), lph = ((lk.data || []).find(x => x.phone) || {}).phone; doc._loy = await loyaltyHtml(r.receipt_no, lph); } catch (_) {}
   printHtml(docPrintHtml(doc), r.receipt_no + " receipt.pdf");
 }
 function wireSaleSplit(f, isNew) {
@@ -382,7 +401,7 @@ function wireSalePrompt(f, pay, total) {
   amt.addEventListener("input", () => { touched = true; });
   f.addEventListener("input", e => { if (e.target !== amt && e.target.id !== "spPhone") show(); }); pay.addEventListener("change", show); show();
   send.onclick = async () => {
-    if (busy) return; const phone = f.querySelector("#spPhone").value.trim(), n = Math.round(Number(amt.value || 0));
+    if (busy) return; const phone = f.querySelector("#spPhone").value.trim() || (f.elements.cust_phone ? f.elements.cust_phone.value.trim() : ""), n = Math.round(Number(amt.value || 0));
     msg.style.color = ""; if (!phone) { msg.style.color = "#b42318"; msg.textContent = "Type the customer's phone number."; return; } if (!(n >= 1)) { msg.style.color = "#b42318"; msg.textContent = "Enter the amount to request."; return; }
     busy = true; send.disabled = true; msg.textContent = "Sending…";
     let provider; try { const p = await db.functions.invoke("stk-push", { body: { action: "providers" } }); provider = p.data && p.data.default; } catch (_) {}
@@ -1507,7 +1526,7 @@ function docPrintHtml(r) {
       <tr><th colspan="3" align="right">${cn ? "TOTAL CREDITED (KES)" : "TOTAL (KES)"}</th><th>${kes(t.total)}</th></tr>${["Invoice", "Receipt"].includes(ty) ? `<tr><td colspan="3" align="right">Paid to date</td><td>${kes(r.paid_before)}</td></tr><tr><th colspan="3" align="right">BALANCE (KES)</th><th>${kes(t.balance)}</th></tr>` : ""}`;
   const foot = dn ? `<p>Goods received in good order and condition.</p><p>Delivered by: ______________________ &nbsp; Received by (name, signature, date): ______________________</p>`
     : `<p>${ty === "Quotation" ? "Prices in KES. Goods remain the property of Franksomi Solution Ltd until paid in full." : cn ? "This credit note cancels the invoice named above." : "Thank you for your business."}</p>`;
-  return head(ty.toUpperCase(), no) + banner + kv(info) + `<table style="margin-top:10px"><thead><tr>${head_}</tr></thead><tbody>${rows}${sum_}</tbody></table>` + foot;
+  return head(ty.toUpperCase(), no) + banner + kv(info) + `<table style="margin-top:10px"><thead><tr>${head_}</tr></thead><tbody>${rows}${sum_}</tbody></table>` + (r._loy || "") + foot;
 }
 
 // ---- printable cards ----------------------------------------------------------
@@ -1542,7 +1561,7 @@ function printCard(kind, r) {
      <p style="text-align:center;color:#555">✂ - - - - - - - - - - - - - tear off here - - - - - - - - - - - - -</p>
      <div class="box"><img src="logo.png" alt="" height="22" style="vertical-align:middle;margin-right:6px"><b>CLIENT RECEIPT — ${SHOP.name}</b> &nbsp; Job No: <b>${esc(r.job_no)}</b><br>Client: ${esc(r.client_name)} &nbsp; Job type: ${esc(r.job_type)}<br>Site: ${esc(r.site)} &nbsp; Contract price: KES ${kes(r.contract_price)}<br>
      Deposit received (KES): ____________ &nbsp; Received by: ____________<br><small>Keep this slip. It confirms your booking and any deposit paid.</small></div>`;
-  if (kind === "document") { printHtml(docPrintHtml(r), docNo(r) + " " + r.doc_type + ".pdf"); return; }
+  if (kind === "document") { (async () => { if (r.doc_type === "Receipt" && r.contact) r = { ...r, _loy: await loyaltyHtml(r.reference || "", r.contact) }; printHtml(docPrintHtml(r), docNo(r) + " " + r.doc_type + ".pdf"); })(); return; }
   const fname = kind === "jobcard" ? "JC-" + String(r.id).padStart(4, "0") + " Job Card.pdf" : kind === "fieldcard" ? r.job_no + " Field Job Card.pdf" : docNo(r) + " " + r.doc_type + ".pdf";
   printHtml(h, fname);
 }
