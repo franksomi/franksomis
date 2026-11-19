@@ -19,6 +19,7 @@
     <div class="card" style="margin-top:18px"><h3>How will you pay?</h3>
       <label class="opt"><input type="radio" name="pay" value="mpesa_now" checked><span><b>M-Pesa now</b><small>We send a payment prompt to your phone. Enter your PIN and you are done.</small></span></label>
       <label class="opt"><input type="radio" name="pay" value="on_delivery"><span><b id="cod">Pay on delivery</b><small>Pay the rider in cash or by M-Pesa when your order arrives.</small></span></label></div>
+    <div class="card" style="margin-top:18px"><label>Referral code (optional)<input name="agent_code" maxlength="12" autocomplete="off" placeholder="If an agent told you about us" style="text-transform:uppercase"></label></div>
     <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
     <p class="msg" id="err" role="alert"></p>
     <button class="btn" id="place" type="submit" style="width:100%;margin-top:8px">Place order</button>
@@ -29,7 +30,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script>
 <script>
 (function(){
-  var E=WEB.esc,K=WEB.kes,$=WEB.$,zones=[],lines=[];WEB.chrome("shop.html");
+  var E=WEB.esc,K=WEB.kes,$=WEB.$,zones=[],lines=[];WEB.chrome("shop.html");(function(){var c=WEB.ref.get(),i=document.querySelector("[name=agent_code]");if(c&&i&&!i.value)i.value=c})();
   function fee(){var f=document.querySelector('input[name=ful]:checked');if(!f||f.value==="pickup")return 0;var z=zones.find(function(z){return String(z.id)===$("#zone").value});return z?Number(z.fee):0}
   function sums(){var sub=lines.filter(function(l){return!l.gone}).reduce(function(s,l){return s+l.price*l.qty},0),fe=fee();
     $("#totals").innerHTML='<div class="sumrow"><span>Items</span><span>'+K(sub)+'</span></div><div class="sumrow"><span>Delivery</span><span>'+(fee()?K(fe):"Free")+'</span></div><div class="sumrow t"><span>Total</span><span>'+K(sub+fe)+'</span></div>';return sub+fe}
@@ -50,7 +51,7 @@
   $("#f").onsubmit=async function(e){e.preventDefault();var f=e.target,err=$("#err"),btn=$("#place");err.className="msg";err.textContent="";
     if(lines.some(function(l){return l.gone})){err.className="msg bad";err.textContent="Please remove the unavailable item from your cart (shop page, cart).";return}
     var fl=document.querySelector('input[name=ful]:checked').value,pay=f.pay.value;btn.disabled=true;btn.textContent="Placing your order…";
-    var body={name:f.name.value,phone:f.phone.value,email:f.email.value,fulfil:fl,zone_id:fl==="delivery"?Number($("#zone").value):null,address:f.address.value,notes:f.notes.value,pay_method:pay,website:f.website.value,items:lines.map(function(l){return{id:Number(l.id),qty:l.qty}})};
+    var body={name:f.name.value,phone:f.phone.value,email:f.email.value,fulfil:fl,zone_id:fl==="delivery"?Number($("#zone").value):null,address:f.address.value,notes:f.notes.value,pay_method:pay,agent_code:f.agent_code.value,website:f.website.value,items:lines.map(function(l){return{id:Number(l.id),qty:l.qty}})};
     var r=await WEB.db.rpc("shop_place_order",{p:body});var d=r.data||{};btn.disabled=false;btn.textContent="Place order";
     if(r.error||!d.ok){err.className="msg bad";err.textContent=d.error==="stock"?(d.name+" has only "+d.available+" left. Please change the quantity in your cart."):d.error==="gone"?"One item is no longer available. Please remove it from your cart.":BAD[d.error]||"We could not place the order. Please try again or call 0711 952 924.";return}
     WEB.cart.clear();try{localStorage.setItem("fk_me",JSON.stringify({name:f.name.value,phone:f.phone.value}));localStorage.setItem("fk_last",d.order_no)}catch(_){}

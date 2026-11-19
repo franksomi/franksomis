@@ -6,5 +6,6 @@ Disallow: /account.html
 Disallow: /checkout.html
 Disallow: /print.html
 Disallow: /track.html
+Disallow: /agent.html
 
 Sitemap: https://www.franksomi.com/sitemap.xml

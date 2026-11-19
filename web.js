@@ -227,6 +227,7 @@
       return `<h1 style="display:flex;justify-content:space-between;gap:12px"><span><img src="logo.png" alt="" height="30" style="vertical-align:middle;margin-right:8px;background:#fff;border-radius:4px;padding:2px">FRANKSOMI SOLUTION LTD</span><span>PAYMENT RECEIPT</span></h1><p>Tel: ${esc(W.phone)} | ${esc(W.email)} | ${esc(W.web)} | ${esc(W.addr)}, Kenya</p>
         <table>${row("Receipt no.", r.receipt_no)}${row("Date", when)}${row("Received from", r.phone)}${row("For", [r.ref, r.purpose].filter(Boolean).join(" · "))}${row("Paid by", "M-Pesa")}${row("M-Pesa code", r.mpesa_receipt)}
         <tr><th>Amount received (KES)</th><td><b style="font-size:18px">${n2(r.amount)}</b></td></tr></table>
+        ${r.points_on ? `<p class="box"><b>Loyalty points</b>${Number(r.points_earned) > 0 ? ` &nbsp; earned on this: <b>+${Number(r.points_earned)}</b>` : ""} &nbsp; your balance: <b>${Number(r.points_balance || 0)}</b> point${Number(r.points_balance) === 1 ? "" : "s"} (worth KES ${n2(Number(r.points_balance || 0) * Number(r.points_value_kes || 1))})<br><small>You earn 1 point for every KES ${Number(r.points_per_kes || 100)} once your order, repair or job is complete and fully paid. Ask us to redeem your points.</small></p>` : ""}
         <p>Thank you for your payment. This receipt confirms money received by ${esc(W.name)}. Keep it for your records.</p>`;
     },
     open(r) {
@@ -242,6 +243,12 @@
     }
   };
 
-  const api = { receipt, W, esc, kes, waLink, $, db, configured: !!db, svgIcon, iconFor, art, picture, products, card, cart, cartLines, chrome, openCart, showProduct, wireProducts, payOrder, safe };
+  // a referral code arrives as ?ref=CODE on any page; it is remembered for 60 days and offered at checkout and on the quote form
+  const ref = {
+    get() { try { const o = JSON.parse(localStorage.getItem("fk_ref") || "null"); if (o && o.c && Date.now() - o.t < 60 * 864e5) return o.c; } catch (_) {} return ""; },
+    set(c) { c = String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12); if (c.length < 4) return; try { localStorage.setItem("fk_ref", JSON.stringify({ c, t: Date.now() })); } catch (_) {} }
+  };
+  try { const q = new URLSearchParams(location.search).get("ref"); if (q) ref.set(q); } catch (_) {}
+  const api = { ref, receipt, W, esc, kes, waLink, $, db, configured: !!db, svgIcon, iconFor, art, picture, products, card, cart, cartLines, chrome, openCart, showProduct, wireProducts, payOrder, safe };
   root.WEB = api; if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

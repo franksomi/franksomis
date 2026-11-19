@@ -108,7 +108,7 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
   <form class="card" id="enqForm" novalidate><h3>Send us a message</h3>
     <label>Your name<input name="name" required autocomplete="name"></label><label>Phone number<input name="phone" type="tel" required autocomplete="tel" placeholder="07xx xxx xxx"></label>
     <label>What do you need?<select name="topic"><option>Phone repair</option><option>Laptop or printer repair</option><option>CCTV quote</option><option>Electrical quote</option><option>Landlord WiFi</option><option>Networking or ICT support</option><option>Networking equipment</option><option>Monthly account for my business</option><option>Contract enquiry (institution)</option><option>Phones and accessories</option><option>Printing and cyber</option><option>Something else</option></select></label>
-    <label>Message (optional)<textarea name="message" maxlength="600"></textarea></label><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+    <label>Message (optional)<textarea name="message" maxlength="600"></textarea></label><label>Referral code (optional)<input name="agent_code" maxlength="12" autocomplete="off" style="text-transform:uppercase"></label><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
     <button class="btn" type="submit">Send</button><p class="msg" id="enqMsg" role="status"></p></form>
 </div></section>
 </main>
@@ -140,10 +140,11 @@ if (/(access_token|type=(invite|recovery|signup|magiclink)|error_description)/.t
   document.getElementById("inIc1").innerHTML=WEB.svgIcon("network");document.getElementById("inIc2").innerHTML=WEB.svgIcon("cctv");document.getElementById("inIc3").innerHTML=WEB.svgIcon("bolt");document.getElementById("inIc4").innerHTML=WEB.svgIcon("router");
   document.getElementById("instAsk").onclick=function(){document.getElementById("enqForm").topic.value="Contract enquiry (institution)"};
   document.getElementById("bizAsk").onclick=function(){document.getElementById("enqForm").topic.value="Monthly account for my business"};
+  (function(){var c=WEB.ref.get(),i=document.querySelector("#enqForm [name=agent_code]");if(c&&i&&!i.value)i.value=c})();
   document.getElementById("enqForm").onsubmit=async function(e){e.preventDefault();var f=e.target,m=document.getElementById("enqMsg");m.className="msg";
     if(!WEB.db){m.className="msg bad";m.textContent="The form is not switched on yet. Please call or WhatsApp us on 0711 952 924.";return}
     var b=f.querySelector("button");b.disabled=true;m.textContent="Sending…";
-    var r=await WEB.db.rpc("shop_enquiry",{p:{name:f.name.value,phone:f.phone.value,topic:f.topic.value,message:f.message.value,website:f.website.value}});b.disabled=false;
+    var r=await WEB.db.rpc("shop_enquiry",{p:{name:f.name.value,phone:f.phone.value,topic:f.topic.value,message:f.message.value,agent_code:f.agent_code.value,website:f.website.value}});b.disabled=false;
     var d=r.data||{};if(r.error||!d.ok){m.className="msg bad";m.textContent=d.error==="phone"?"Please enter a valid phone number.":d.error==="name"?"Please enter your name.":d.error==="too_many"?"Too many messages. Please call us.":"Something went wrong. Please call or WhatsApp us.";return}
     m.className="msg ok";m.textContent="Thank you! We will call or message you soon.";f.reset()};
 })();
