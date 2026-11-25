@@ -69,7 +69,7 @@
   }
 
   // ---- header, footer, cart drawer ----
-  const NAV = [["index.html", "Home"], ["services.html", "Services"], ["about.html", "About"], ["shop.html", "Shop"], ["track.html", "Track my order"], ["https://franksomiwifi.com/buy/packages", "Buy WiFi"], ["index.html#contact", "Contact"]];
+  const NAV = [["index.html", "Home"], ["services.html", "Services"], ["about.html", "About"], ["shop.html", "Shop"], ["track.html", "Track my order"], ["airtime.html", "Buy airtime"], ["https://franksomiwifi.com/buy/packages", "Buy WiFi"], ["index.html#contact", "Contact"]];
   // ---- opening hours (set in the staff app: Website text & hours). Shown wherever an element has data-hours, and added to the page's search-engine data.
   const T12 = t => { const [h, m] = String(t).split(":").map(Number), ap = h < 12 ? "am" : "pm", hh = h % 12 || 12; return hh + (m ? ":" + String(m).padStart(2, "0") : "") + " " + ap; };
   const DN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], DFULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -93,7 +93,7 @@
       <nav class="nav" aria-label="Main">${NAV.map(([h, l]) => `<a href="${h}" class="${h === active ? "on" : ""}"${/^http/.test(h) ? ' target="_blank" rel="noopener"' : ""}>${l}</a>`).join("")}<a href="#" class="cartbtn" data-cart>Cart <b data-count>0</b></a></nav></div></header>`;
     const ft = $("#siteFooter"); if (ft) ft.outerHTML = `<footer class="foot"><div class="wrap"><div class="grid"><div><a class="brand" href="index.html"><img src="media/emblem.png" alt="" width="46" height="46"><span>Franksomi Solution Ltd<small>${W.tagline}</small></span></a>
       <p style="margin-top:14px">Phones, laptops, CCTV, electrical, Landlord WiFi, printing and cyber. Fixed right. Tracked live.</p></div>
-      <div><h4>Visit the website</h4><a href="services.html">Services</a><a href="about.html">About us</a><a href="projects.html">Our projects</a><a href="policies.html">Policies</a><a href="account.html">My account (credit customers)</a><a href="shop.html">Online shop</a><a href="track.html">Track an order or repair</a><a href="index.html#contact">Request a quote</a></div>
+      <div><h4>Visit the website</h4><a href="services.html">Services</a><a href="about.html">About us</a><a href="projects.html">Our projects</a><a href="policies.html">Policies</a><a href="account.html">My account (credit customers)</a><a href="shop.html">Online shop</a><a href="track.html">Track an order or repair</a><a href="airtime.html">Buy airtime</a><a href="index.html#contact">Request a quote</a></div>
       <div><h4>Landlord WiFi</h4><a href="https://franksomiwifi.com/buy/packages" target="_blank" rel="noopener">Buy a hotspot package</a><a href="https://franksomiwifi.com/portal/login" target="_blank" rel="noopener">Customer portal login</a></div>
       <div><h4>Talk to us</h4><a href="tel:${W.tel}">Call ${W.phone}</a><a href="${waLink("Hello Franksomi, ")}" target="_blank" rel="noopener">WhatsApp ${W.phone}</a><a href="mailto:${W.email}">${W.email}</a><a href="https://${W.web}">${W.web}</a><span>${W.addr}, Kenya</span><span data-hours></span><a href="${W.google}" target="_blank" rel="noopener">Find us on Google</a></div>
       <div><h4>Pay safely</h4><span>M-Pesa prompt to your phone, or pay on delivery / pickup. A receipt every time.</span></div></div>
