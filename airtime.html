@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buy airtime online | Franksomi Solution Ltd</title><meta name="description" content="Buy Safaricom, Airtel, Telkom, JTL and Equitel airtime online for one number or many. Pay by M-Pesa and the airtime is sent straight away."><meta name="theme-color" content="#0E152B">
+<link rel="icon" href="media/emblem.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap"><link rel="stylesheet" href="web.css">
+<link rel="manifest" href="site.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
+
+<section class="shophead"><div class="wrap"><span class="kicker">Airtime</span><h1 style="font-size:clamp(1.8rem,5vw,2.6rem)">Buy airtime online</h1><p>Safaricom, Airtel, Telkom, JTL and Equitel. Pay with M-Pesa and the airtime is sent to the number straight away. For one number or many.</p></div></section>
+<main id="main" class="wrap" style="padding:30px 18px 70px;max-width:820px">
+  <form class="card" id="f" novalidate>
+    <div class="trackbox" style="margin-top:0"><button type="button" class="btn" id="m1">One number</button><button type="button" class="btn line" id="mm" style="color:var(--txt)">Many numbers</button></div>
+    <div id="one" style="margin-top:16px"><div class="trackbox" style="margin-top:0"><input name="phone" type="tel" placeholder="Number to top up (07XX XXX XXX)" aria-label="Number to top up" autocomplete="off"><input name="amount" type="number" min="5" max="1000" step="1" placeholder="Amount (KES)" aria-label="Amount in shillings"></div>
+      <div class="trackbox" style="margin-top:10px">${""}<button type="button" class="btn sm line" data-amt="20" style="color:var(--txt)">20</button><button type="button" class="btn sm line" data-amt="50" style="color:var(--txt)">50</button><button type="button" class="btn sm line" data-amt="100" style="color:var(--txt)">100</button><button type="button" class="btn sm line" data-amt="200" style="color:var(--txt)">200</button><button type="button" class="btn sm line" data-amt="500" style="color:var(--txt)">500</button></div></div>
+    <div id="many" hidden style="margin-top:16px"><label for="list" style="display:block;margin-bottom:6px">One number per line: <b>phone, amount</b> (up to 50 numbers)</label>
+      <textarea id="list" name="list" rows="7" placeholder="0711 952 924, 100&#10;0733 111 222, 50&#10;0722 000 111, 20" style="width:100%;font-family:monospace"></textarea>
+      <div class="trackbox" style="margin-top:10px"><input name="def" type="number" min="5" max="1000" step="1" placeholder="Same amount for lines with no amount (optional)" aria-label="Default amount"><button type="button" class="btn line" id="chk" style="color:var(--txt)">Check the list</button></div>
+      <div id="prev" style="margin-top:10px"></div></div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+    <div class="trackbox" style="margin-top:0"><input name="payer" type="tel" placeholder="Your M-Pesa number (the payment prompt goes here)" required aria-label="Your M-Pesa number" autocomplete="tel"><input name="name" placeholder="Your name (optional)" maxlength="80" aria-label="Your name" autocomplete="name"></div>
+    <p style="margin:14px 0 0"><b id="sum"></b></p>
+    <div class="trackbox"><button class="btn green" id="go" type="submit">Pay with M-Pesa and send airtime</button></div>
+    <p class="msg" id="msg" role="status" aria-live="polite"></p>
+    <small style="color:var(--mut)">You pay first, then every number is topped up. Up to KES 1,000 per number and KES 20,000 per payment. If a top-up fails, we refund that amount to your M-Pesa number: call 0711 952 924.</small>
+  </form>
+  <div id="out" hidden class="card" style="margin-top:16px"></div>
+</main>
+<div id="siteFooter"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script>
+<script>
+(function(){
+  var E=WEB.esc,K=WEB.kes,$=WEB.$,many=false,busy=false,POLL=function(){return window.__POLL_MS__||3000};WEB.chrome("airtime.html");
+  var f=$("#f"),msg=$("#msg");function say(t,bad){msg.className="msg"+(bad?" bad":"");msg.textContent=t}
+  function mode(m){many=m;$("#one").hidden=m;$("#many").hidden=!m;$("#m1").className="btn"+(m?" line":"");$("#mm").className="btn"+(m?"":" line");$("#m1").style.color=m?"var(--txt)":"";$("#mm").style.color=m?"":"var(--txt)";sum()}
+  $("#m1").onclick=function(){mode(false)};$("#mm").onclick=function(){mode(true)};
+  f.onclick=function(e){var b=e.target.closest("[data-amt]");if(b){f.amount.value=b.dataset.amt;sum()}};
+  function parse(){var items=[],bad=[],seen={},def=Number(f.def.value)||0;
+    var lines=many?f.list.value.split(/\r?\n/):[f.phone.value+","+f.amount.value];
+    lines.forEach(function(ln,i){ln=ln.trim();if(!ln||(many&&/^(phone|number|mobile)\b/i.test(ln)))return;var p=ln.split(/[,;\t]/).map(function(x){return x.trim()});
+      var ph=String(p[0]||"").replace(/[\s\-()]/g,""),amt=(p[1]===undefined||p[1]==="")?def:Number(String(p[1]).replace(/[^\d.]/g,"")),who=many?"Line "+(i+1)+": ":"";
+      if(!/^(\+?254|0)[17]\d{8}$/.test(ph))return bad.push(who+(p[0]?"“"+p[0]+"” is not a valid Kenyan mobile number":"enter the number to top up"));
+      if(!Number.isInteger(amt)||amt<5||amt>1000)return bad.push(who+"the amount must be a whole number from 5 to 1,000 shillings");
+      var k=ph.replace(/^(\+?254|0)/,"")+":"+amt;if(seen[k])return bad.push(who+p[0]+" for "+amt+" is listed twice");seen[k]=1;items.push({phone:ph,amount:amt})});
+    if(items.length>50)bad.push("Up to 50 numbers at a time");
+    var tot=items.reduce(function(s,x){return s+x.amount},0);if(tot>20000)bad.push("The total is more than KES 20,000 for one payment");
+    return {items:items,bad:bad,total:tot}}
+  function sum(){var p=parse();$("#sum").textContent=p.items.length&&!p.bad.length?"Total to pay: "+K(p.total)+(p.items.length>1?" for "+p.items.length+" numbers":""):""}
+  f.addEventListener("input",sum);
+  $("#chk").onclick=function(){var p=parse();$("#prev").innerHTML=(p.bad.length?'<p class="msg bad">'+p.bad.slice(0,8).map(E).join("<br>")+(p.bad.length>8?"<br>…and "+(p.bad.length-8)+" more":"")+'</p>':"")+(p.items.length?'<p><b>'+p.items.length+'</b> number'+(p.items.length===1?"":"s")+', total <b>'+K(p.total)+'</b></p>':"");sum()};
+  var ST={Success:"Sent ✓",Failed:"Failed",Submitted:"Sending…",Sending:"Sending…","Awaiting payment":"Waiting",Cancelled:"Cancelled"};
+  function show(v){var done=v.working===0;$("#out").hidden=false;
+    $("#out").innerHTML='<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center"><div><small style="color:var(--mut)">Your top-up</small><div class="ordno" style="font-size:1.4rem">'+E(v.ref)+'</div></div><span class="pill '+(done&&!v.failed?"ok":v.failed&&done?"bad":"")+'">'+(!v.paid?"Waiting for payment":done?(v.failed?v.sent+" sent, "+v.failed+" failed":"All sent"):v.sent+" of "+v.n+" sent")+'</span></div>'+
+      '<div style="margin-top:10px;max-height:300px;overflow:auto"><table><tbody>'+v.rows.map(function(r){return '<tr><td>'+E(r.phone)+'</td><td class="n">'+K(r.amount)+'</td><td>'+E(ST[r.status]||r.status)+'</td></tr>'}).join("")+'</tbody></table></div>'+
+      (v.failed&&done?'<p class="msg bad" style="margin-top:10px">'+v.failed+' top-up'+(v.failed===1?"":"s")+' did not go through. '+K(v.failed_total)+' will be refunded to '+E(v.payer)+'. Call 0711 952 924 with the code '+E(v.ref)+' if you do not have it within a day.</p>':"")+
+      (done&&!v.failed?'<p class="msg ok" style="margin-top:10px">Done. Thank you for buying from Franksomi.</p>':"")}
+  async function watch(ref,token,tries){var last=null;
+    for(var i=0;i<tries;i++){var r=await WEB.db.functions.invoke("airtime-send",{body:{action:"web_status",ref:ref,token:token}});
+      if(r.data&&r.data.ok){last=r.data;show(last);if(last.working===0&&last.paid)return last;if(last.cancelled)return last}
+      await new Promise(function(x){setTimeout(x,POLL())})}
+    return last}
+  f.onsubmit=async function(e){e.preventDefault();if(busy)return;var p=parse(),payer=f.payer.value.trim();
+    if(!WEB.db){say("Airtime ordering is not switched on yet. Please call 0711 952 924.",true);return}
+    if(!p.items.length||p.bad.length){say(p.bad.length?p.bad[0]:"Enter the number and amount first.",true);return}
+    if(!/^(\+?254|0)[17]\d{8}$/.test(payer.replace(/[\s\-()]/g,""))){say("Enter your M-Pesa number so we can send the payment prompt.",true);return}
+    busy=true;$("#go").disabled=true;say("Setting up your top-up…");
+    try{
+      var c=await WEB.db.functions.invoke("airtime-send",{body:{action:"web_create",items:p.items,name:f.name.value,payer:payer}});
+      if(c.error||!c.data||!c.data.ok){var m="We could not start the top-up. Please try again.";try{var j=c.error&&c.error.context?await c.error.context.json():c.data;if(j&&j.message)m=j.message}catch(_){}say(m,true);return}
+      var b=c.data;try{sessionStorage.setItem("fk_atb",JSON.stringify({ref:b.ref,token:b.token}))}catch(_){}
+      var r=await WEB.payOrder(b.ref,payer,b.total,function(t){say(t)});
+      if(!r.ok){say(r.message,true);return}
+      say("Payment received ✓ Sending your airtime…");
+      var v=await watch(b.ref,b.token,60);
+      if(v&&v.working===0)say("");else say("Your payment is received. The airtime is still being sent: this page will not send it twice. Keep this page open or come back to airtime.html in a few minutes.",false);
+    }finally{busy=false;$("#go").disabled=false}};
+  // coming back later: pick up where we left off
+  try{var s=JSON.parse(sessionStorage.getItem("fk_atb")||"null");if(s&&WEB.db)watch(s.ref,s.token,1)}catch(_){}
+  mode(false);
+})();
+</script><script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>
