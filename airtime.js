@@ -4,10 +4,15 @@ const atShow = p => p ? "0" + p.slice(3, 6) + " " + p.slice(6, 9) + " " + p.slic
 const atErr = async res => { let m = "Something went wrong."; try { const j = res.error && res.error.context ? await res.error.context.json() : res.data; if (j && j.message) m = j.message; } catch (_) {} return m; };
 const atWait = () => new Promise(r => setTimeout(r, window.__POLL_MS__ || 3000));
 
+// M-Pesa paybill standard tariff: what the PAYER is charged, by amount paid (Mgao / Business bouquet / Customer bouquet)
+const AT_TARIFF = [[1,100,0,0,0],[101,500,5,5,0],[501,1000,10,10,0],[1001,1500,10,15,0],[1501,2500,13,20,0],[2501,3500,16,25,0],[3501,5000,16,34,0],[5001,7500,17,42,0],[7501,10000,18,48,0],[10001,15000,18,57,0],[15001,20000,19,62,0],[20001,25000,20,67,0],[25001,30000,20,72,0],[30001,35000,21,83,0],[35001,40000,23,99,0],[40001,45000,23,103,0],[45001,50000,24,108,0],[50001,250000,24,108,0]];
+const atCharge = (kind, amt) => { const r = AT_TARIFF.find(x => amt >= x[0] && amt <= x[1]); return r ? r[{ mgao: 2, business: 3, customer: 4 }[kind]] : ""; };
+
 async function airtimePage() {
   const rows = ((await db.from("airtime_v").select("*").order("id", { ascending: false }).limit(200)).data) || [];
   const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
   const day = rows.filter(r => r.status === "Success" && String(r.finished_at || r.created_at).slice(0, 10) === today);
+  const mg0 = can("airtime.manage"), tops = mg0 ? ((await db.from("airtime_topups").select("*").order("id", { ascending: false }).limit(6)).data || []) : [], bk = mg0 ? ((await db.rpc("airtime_float_books")).data || null) : null;
   const fl = rows.find(r => r.float_after !== null && r.float_after !== undefined), owed = rows.filter(r => r.status === "Failed" && r.refund_due);
   const pend = rows.filter(r => r.status === "Awaiting payment" || r.status === "Sending" || r.status === "Submitted");
   const mg = can("airtime.manage"), prof = day.reduce((s, r) => s + Number(r.profit || 0), 0);
@@ -17,6 +22,17 @@ async function airtimePage() {
     ${can("costs.view") ? `<div class="card"><small>Earned today</small><b>KES ${kes(prof)}</b></div>` : ""}
     <div class="card"><small>Float left after last sale</small><b>${fl ? "KES " + kes(fl.float_after) : "—"}</b></div>
     <div class="card"><small>Refunds to give</small><b ${owed.length ? 'style="color:#b42318"' : ""}>${owed.length}</b></div></div>
+    ${mg ? `<details class="card" style="margin:12px 0" id="attop"><summary style="cursor:pointer"><b>Top up float</b> <small style="color:var(--mut)">record what you paid Instalipa and the float you got</small></summary>
+      <form id="attf" class="grid">
+        <label>Amount paid (KES)<input name="paid" type="number" min="10" step="1" required></label>
+        <label>Bonus on top (%)<input name="pct" type="number" min="0" max="50" step="0.1" value="5"></label>
+        <label>Float credited (KES)<input name="credited" type="number" min="10" step="0.01" required></label>
+        <label>M-Pesa tariff<select name="tariff"><option value="">Type the charge myself</option><option value="mgao">Mgao (you pay part)</option><option value="business">Business bouquet (you pay all)</option><option value="customer">Customer bouquet (Instalipa pays)</option></select></label>
+        <label>M-Pesa charge you paid (KES)<input name="charge" type="number" min="0" max="500" step="0.01" placeholder="0 if none"></label>
+        <label>M-Pesa code<input name="ref" maxlength="20" placeholder="e.g. SJL4XXXXXX"></label>
+        <div class="full bar"><button class="btn">Save top-up</button></div><p id="attmsg" class="msg full" style="min-height:1.4em;margin:0"></p></form>
+      ${bk && bk.has_topups ? `<p style="margin:8px 0"><small>Recorded: paid <b>KES ${kes(bk.paid)}</b>, float credited <b>KES ${kes(bk.credited)}</b> (bonus <b>KES ${kes(bk.bonus)}</b>). Airtime sent since: KES ${kes(bk.used)}. <b>Float by your records: KES ${kes(bk.expected)}</b>${fl && Math.abs(Number(fl.float_after) - Number(bk.expected)) > 1 ? ` · Instalipa shows KES ${kes(fl.float_after)}: the difference is anything sold or topped up that is not recorded here` : ""}</small></p>` : `<p style="margin:8px 0"><small>No top-ups recorded yet. Until you record one, each sale's cost comes from the discount Instalipa reports.</small></p>`}
+      ${tops.length ? `<table><thead><tr><th>Date</th><th class="n">Paid</th><th class="n">Float</th><th class="n">Charge</th><th>Code</th></tr></thead><tbody>${tops.map(t => `<tr><td>${esc(t.topped_on)}</td><td class="n">${kes(t.paid)}</td><td class="n">${kes(t.credited)}</td><td class="n">${kes(t.charge)}</td><td>${esc(t.mpesa_ref || "")}</td></tr>`).join("")}</tbody></table>` : ""}</details>` : ""}
     <div class="card" style="margin:12px 0"><form id="atf" class="grid">
       <label>Airtime for (phone)<input name="phone" required inputmode="tel" placeholder="07XX XXX XXX"></label>
       <label>Amount (KES)<input name="amount" type="number" min="5" max="10000" step="1" required></label>
@@ -79,6 +95,21 @@ async function airtimePage() {
     if (st === "Success") toast("Airtime sent ✓ " + s.ref);
     await airtimePage(); if (st) { const m = $("#atmsg"); if (m) m.textContent = ""; }
   };
+  // ---- float top-up: the bonus lowers the cost of each sale; the M-Pesa charge is booked as an expense ----
+  const tf = $("#attf");
+  if (tf) {
+    const tmsg = $("#attmsg"), tsay = (t, bad) => { tmsg.style.color = bad ? "#b42318" : ""; tmsg.textContent = t; };
+    try { tf.elements.tariff.value = localStorage.getItem("fk_at_tariff") || ""; } catch (_) {}
+    const fromPaid = () => { const p = Number(tf.elements.paid.value) || 0; tf.elements.credited.value = p ? (Math.round(p * (1 + (Number(tf.elements.pct.value) || 0) / 100) * 100) / 100) : ""; fromTariff(); };
+    const fromTariff = () => { const k = tf.elements.tariff.value, p = Number(tf.elements.paid.value) || 0; try { localStorage.setItem("fk_at_tariff", k); } catch (_) {} if (k && p) tf.elements.charge.value = atCharge(k, p); };
+    tf.elements.paid.oninput = tf.elements.pct.oninput = fromPaid; tf.elements.tariff.onchange = fromTariff;
+    tf.onsubmit = async e => {
+      e.preventDefault(); const v = n => tf.elements[n].value;
+      if (v("charge") === "") return tsay("Enter the M-Pesa charge you paid (0 if there was none).", true);
+      const r = await db.rpc("airtime_topup_add", { p_paid: Number(v("paid")), p_credited: Number(v("credited")), p_charge: Number(v("charge")), p_ref: v("ref"), p_on: null, p_note: null });
+      if (r.error) return tsay(r.error.message, true); toast("Float top-up saved ✓"); airtimePage();
+    };
+  }
   // ---- bulk: check the list, take ONE payment for the total, then send every number once ----
   const bf = $("#atbf"), bmsg = $("#atbmsg"), bsay = (t, bad) => { bmsg.style.color = bad ? "#b42318" : ""; bmsg.textContent = t; };
   const syncB = () => { bf.querySelector(".payer").style.display = bf.elements.method.value === "M-Pesa" ? "" : "none"; }; bf.elements.method.onchange = syncB; syncB();
