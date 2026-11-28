@@ -33,7 +33,8 @@
     equipment: "M4 5h16v10H4z M8 19h8 M12 15v4",
     vault: "M5 3h10l4 4v14H5z M14 3v5h5 M9 13h6 M9 17h6",
     projects: "M3 7h18v13H3z M8 7V4h8v3 M3 13h18",
-    policies: "M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4"
+    policies: "M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4",
+    requests: "M8 4h8v3H8z M6 5H5v16h14V5h-1 M9 12h6 M9 16h4"
   };
   const icon = (n, size = 20) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${(P[n] || P.dashboard).split(" M").map((d, i) => `<path d="${i ? "M" : ""}${d}"/>`).join("")}</svg>`;
 
