@@ -50,7 +50,7 @@
       f.hidden=true;var o=$("#out");o.hidden=false;
       o.innerHTML='<h3 style="margin-top:0">Thank you. Your request is in.</h3><p>Your reference is <b>'+E(ref)+'</b>. We will send you an SMS as soon as it is available.</p>'+
         (Number(d.deposit)>0?(paid?'<p><b>Deposit of '+K(d.deposit)+' received.</b> It is held for you and counts toward the price.</p>':'<p style="color:#b54708">'+E(msg||"The deposit was not paid.")+' Your request is saved without a deposit. You can pay it at the shop or call 0711 952 924 quoting '+E(ref)+'.</p>'):"")+
-        '<p><a class="btn" href="request.html">Make another request</a></p>';
+        '<p><a class="btn" href="track.html?order='+encodeURIComponent(ref)+'">Track this request</a> <a class="btn line" href="request.html">Make another request</a></p>';try{sessionStorage.setItem("fk_tp",f.phone.value)}catch(_){}
       say("");
     }catch(x){say("Something went wrong. Please try again or call 0711 952 924.",1)}finally{busy=false;$("#go").disabled=false}};
 })();
