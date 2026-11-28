@@ -91,16 +91,16 @@ function lyAdjust(r) {
 // ---------- Referral agents ----------
 const agRule = a => a.mode === "percent" ? `${Number(a.rate)}% of sales` : a.mode === "profit" ? `${Number(a.rate)}% of profit` : `Tiered on ${a.basis}: ` + (a.tiers || []).map(t => `from ${kes(t.from)} → ${Number(t.rate)}%`).join(", ");
 async function agentsPage() {
-  const rows = (await db.from("agents_v").select("*").order("name")).data || [], st = (await db.rpc("loyalty_settings")).data || {}, M = can("agents.manage");
+  const rows = (await db.from("agents_v").select("*").order("name")).data || [], st = (await db.rpc("loyalty_settings")).data || {}, M = can("agents.manage"), tx = (await db.rpc("agent_tax")).data || { on: false, rate: 5, min: 0 };
   const owed = rows.reduce((s, a) => s + Number(a.owed), 0);
   $("#view").innerHTML = `<h2>Referral agents</h2><p style="color:var(--mut);margin-top:0">Agents bring customers. The agent earns commission by the agent's rule when a sale, shop order, repair or job that came with the agent's referral code (or from a customer the agent referred) is complete and fully paid. ${Number(st.agent_window_months) ? `A referral earns for <b>${st.agent_window_months} months</b>.` : "A referral earns for ever."}</p>
     <div class="cards"><div class="card"><small>Agents</small><b>${rows.filter(a => a.active).length}</b></div><div class="card"><small>Commission owed</small><b>KES ${kes(owed)}</b></div><div class="card"><small>Paid so far</small><b>KES ${kes(rows.reduce((s, a) => s + Number(a.paid), 0))}</b></div></div>
-    ${M ? `<div class="bar"><button class="btn" id="an">+ New agent</button><button class="btn ghost" id="aw">Referral period</button></div>` : ""}
+    ${M ? `<div class="bar"><button class="btn" id="an">+ New agent</button><button class="btn ghost" id="aw">Referral period</button><button class="btn ghost" id="at">Withholding tax: ${tx.on ? tx.rate + "%" : "off"}</button></div>` : ""}
     <div class="wrap"><table><thead><tr><th>Referral code</th><th>Agent</th><th>Commission rule</th><th class="n">Customers</th><th class="n">Sales</th><th class="n">Owed</th><th class="n">Paid</th><th></th></tr></thead><tbody id="tb">
     ${rows.map((a, i) => `<tr><td><b>${esc(a.ref_code)}</b><br><small>${esc(a.code)}</small></td><td>${esc(a.name)}${a.active ? "" : ' <span class="tag bad">Off</span>'}<br><small>${esc(lyShow(a.phone || ""))}</small></td><td>${esc(agRule(a))}</td><td class="n">${a.customers}</td><td class="n">${kes(a.sales)}</td><td class="n"><b>${kes(a.owed)}</b></td><td class="n">${kes(a.paid)}</td>
-    <td style="white-space:nowrap"><button class="btn sm ghost" data-sh="${i}">Share code</button> <button class="btn sm ghost" data-cu="${i}">Customers</button> <button class="btn sm ghost" data-co="${i}">Commission</button>${M ? ` <button class="btn sm ghost" data-ed="${i}">Edit</button> <button class="btn sm ghost" data-pr="${i}" title="Let this agent look up selling prices on the agent page">Prices: ${a.can_check_prices ? "on" : "off"}</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="8">No agents yet.</td></tr>`}</tbody></table></div>`;
-  if ($("#an")) $("#an").onclick = () => agForm(null); if ($("#aw")) $("#aw").onclick = () => agWindow(st);
-  $("#tb").onclick = e => { const b = e.target.closest("button"); if (!b) return; const a = rows[b.dataset.sh ?? b.dataset.cu ?? b.dataset.co ?? b.dataset.ed ?? b.dataset.pr]; if (b.dataset.pr) { db.rpc("agent_set_prices", { p_id: a.id, p_on: !a.can_check_prices }).then(x => { if (x.error) toast(lyMsg(x.error)); else { toast(a.can_check_prices ? "Price check switched off for " + a.name : a.name + " can now check prices"); agentsPage(); } }); return; } if (b.dataset.sh) agShare(a); else if (b.dataset.cu) agCustomers(a); else if (b.dataset.co) agCommission(a); else if (b.dataset.ed) agForm(a); };
+    <td style="white-space:nowrap"><button class="btn sm ghost" data-sh="${i}">Share code</button> <button class="btn sm ghost" data-cu="${i}">Customers</button> <button class="btn sm ghost" data-co="${i}">Commission</button>${M ? ` <button class="btn sm ghost" data-ed="${i}">Edit</button> <button class="btn sm ghost" data-pr="${i}" title="Let this agent look up selling prices on the agent page">Prices: ${a.can_check_prices ? "on" : "off"}</button> <button class="btn sm ghost" data-lg="${i}" title="Send the agent a temporary password so they can sign in on the agent page with their phone number">${a.has_login ? "Reset login" : "Issue login"}</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="8">No agents yet.</td></tr>`}</tbody></table></div>`;
+  if ($("#an")) $("#an").onclick = () => agForm(null); if ($("#aw")) $("#aw").onclick = () => agWindow(st); if ($("#at")) $("#at").onclick = () => agTax(tx);
+  $("#tb").onclick = e => { const b = e.target.closest("button"); if (!b) return; const a = rows[b.dataset.sh ?? b.dataset.cu ?? b.dataset.co ?? b.dataset.ed ?? b.dataset.pr ?? b.dataset.lg]; if (b.dataset.lg) return agLogin(a); if (b.dataset.pr) { db.rpc("agent_set_prices", { p_id: a.id, p_on: !a.can_check_prices }).then(x => { if (x.error) toast(lyMsg(x.error)); else { toast(a.can_check_prices ? "Price check switched off for " + a.name : a.name + " can now check prices"); agentsPage(); } }); return; } if (b.dataset.sh) agShare(a); else if (b.dataset.cu) agCustomers(a); else if (b.dataset.co) agCommission(a); else if (b.dataset.ed) agForm(a); };
 }
 // the agent's referral code, link and a ready message to send; a card to print or hand over; change the code
 function agShare(a) {
@@ -169,10 +169,39 @@ async function agCommission(a) {
   const again = async () => { $("#dlg").close(); await agentsPage(); agCommission((await db.from("agents_v").select("*").eq("id", a.id).single()).data || a); };
   f.onclick = async e => { const t = e.target;
     if (t.dataset.vd) { const why = prompt("Why is this commission cancelled?"); if (why === null) return; const x = await db.rpc("agent_void", { p_id: Number(t.dataset.vd), p_note: why }); return x.error ? toast(lyMsg(x.error)) : again(); }
-    if (t.id === "apay") { if (!confirm(`Pay ${a.name} KES ${kes(owed)}? It is recorded under Expenses.`)) return; const x = await db.rpc("agent_pay", { p_agent: a.id, p_ids: null, p_method: f.elements.pm.value, p_ref: f.elements.pref.value || null, p_date: null });
-      if (x.error) { $("#lmsg").className = "msg bad"; $("#lmsg").textContent = lyMsg(x.error); return; } toast(`Paid KES ${kes(x.data.amount)} to ${a.name}`); return again(); }
+    if (t.id === "apay") { if (!confirm(`Pay ${a.name} KES ${kes(owed)}? It is recorded under Expenses. Withholding tax is held back if it is switched on (Agents page).`)) return; const x = await db.rpc("agent_pay", { p_agent: a.id, p_ids: null, p_method: f.elements.pm.value, p_ref: f.elements.pref.value || null, p_date: null });
+      if (x.error) { $("#lmsg").className = "msg bad"; $("#lmsg").textContent = lyMsg(x.error); return; } toast(Number(x.data.wht) > 0 ? `Commission KES ${kes(x.data.amount)}: pay ${a.name} KES ${kes(x.data.net)} after KES ${kes(x.data.wht)} withholding tax` : `Paid KES ${kes(x.data.amount)} to ${a.name}`); return again(); }
     if (t.id === "asale") { const amt = Number(prompt("Sale amount (KES)")); if (!(amt > 0)) return; let prof = null; if (a.mode === "profit" || (a.mode === "tiered" && a.basis === "profit")) { prof = Number(prompt("Profit on the sale (KES)")); if (!(prof >= 0)) return; }
       const x = await db.rpc("agent_sale", { p_agent: a.id, p_phone: null, p_revenue: amt, p_profit: prof, p_date: null, p_ref: prompt("Note (receipt number, optional)") || null }); if (x.error) { $("#lmsg").className = "msg bad"; $("#lmsg").textContent = lyMsg(x.error); return; } toast("Commission KES " + kes(x.data.amount)); return again(); }
     if (t.id === "aprint") printHtml(head("AGENT COMMISSION STATEMENT", a.code) + `<p><b>${esc(a.name)}</b> · ${esc(lyShow(a.phone || ""))}<br>Rule: ${esc(agRule(a))}<br>Printed ${iso(new Date())}</p>` + tbl(["Date", "For", "Sale", "Commission", "Status"], rows.filter(r => r.status !== "Void").map(r => [r.earned_on, (src[r.source] || r.source) + (r.ref ? " " + r.ref : ""), Number(r.revenue), Number(r.amount), r.status]), ["Owed (not yet paid)", "", "", owed, ""]), a.code + " commission statement.pdf"); };
+  $("#dlg").showModal();
+}
+
+// withholding tax held back from commission payouts: on/off, the rate and the payout size from which it applies
+function agTax(tx) {
+  const f = $("#dlgForm"); f.onsubmit = f.oninput = f.onclick = null;
+  f.innerHTML = `<h2>Withholding tax on commission</h2><p style="color:var(--mut);margin-top:0">When on, the tax is held back from each commission payout and recorded on every line. The agent is paid the commission less the tax, and the expense is the full commission. Confirm the rate that applies to your agents with your accountant or KRA.</p>
+    <label><input type="checkbox" name="on" ${tx.on ? "checked" : ""}> Hold back withholding tax</label>
+    <label>Rate (%)<input name="rate" type="number" min="0" max="30" step="0.01" value="${Number(tx.rate)}"></label>
+    <label>Only when a payout is at least (KES, 0 = always)<input name="min" type="number" min="0" step="1" value="${Number(tx.min || 0)}"></label><p id="lmsg" class="msg"></p>
+    <div class="bar"><button class="btn" value="save">Save</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.onsubmit = async e => { if (e.submitter.value !== "save") return; e.preventDefault(); const x = await db.rpc("agent_tax_set", { p_on: f.elements.on.checked, p_rate: Number(f.elements.rate.value), p_min: Number(f.elements.min.value || 0) });
+    if (x.error) { $("#lmsg").className = "msg bad"; $("#lmsg").textContent = lyMsg(x.error); return; } $("#dlg").close(); toast("Saved"); agentsPage(); };
+  $("#dlg").showModal();
+}
+// sign-in for an agent: phone number + a temporary password, sent by SMS (or shown here once)
+function agLogin(a) {
+  const f = $("#dlgForm"); f.onsubmit = f.oninput = f.onclick = null;
+  const base = (window.APP_CONFIG && APP_CONFIG.SITE_URL ? APP_CONFIG.SITE_URL : "https://" + SHOP.web + "/").replace(/\/?$/, "/");
+  f.innerHTML = `<h2>${a.has_login ? "Reset" : "Issue"} sign-in for ${esc(a.name)}</h2><p style="color:var(--mut);margin-top:0">The agent signs in at <b>${esc(base)}agent.html</b> with the phone number <b>${esc(lyShow(a.phone || "") || "(add one first)")}</b> and a temporary password, then chooses a password of their own. Referral code and commission rule stay as they are.</p>
+    <label>How should they get it?<select name="d"><option value="sms">SMS to the agent (SMSLeopard)</option><option value="show">Show it here, I will tell them</option></select></label><p id="lmsg" class="msg"></p>
+    <div class="bar"><button class="btn" value="go">${a.has_login ? "Reset password" : "Create sign-in"}</button><button class="btn ghost" value="cancel" formnovalidate>Cancel</button></div>`;
+  f.onsubmit = async e => { if (e.submitter.value !== "go") return; e.preventDefault(); const m = $("#lmsg"); m.className = "msg"; m.textContent = "Working\u2026";
+    const r = await db.functions.invoke("manage-users", { body: { action: "agent_login", agent_id: a.id, delivery: f.elements.d.value, redirect_to: base } });
+    let d = r.data; if (r.error && !d) { try { d = await r.error.context.json(); } catch (_) {} }
+    if (!d || !d.ok) { m.className = "msg bad"; m.textContent = (d && d.message) || "Could not set up the sign-in. Check that the manage-users function is deployed."; return; }
+    if (d.delivered) { $("#dlg").close(); toast("Temporary password sent to " + d.phone + " by SMS"); agentsPage(); return; }
+    f.onsubmit = ev => { ev.preventDefault(); $("#dlg").close(); agentsPage(); };
+    f.innerHTML = `<h2>Sign-in ready</h2>${d.delivery === "sms" ? `<p class="msg bad">The SMS could not be sent: ${esc(d.delivery_error || "unknown error")}. Give the agent these details yourself.</p>` : ""}<p>Phone: <b>${esc(d.phone)}</b><br>Temporary password: <b style="font-size:1.3em;letter-spacing:.05em">${esc(d.password)}</b></p><p style="color:var(--mut)">Shown only now. The agent must choose a new password at first sign-in.</p><div class="bar"><button class="btn" value="ok">Done</button></div>`; };
   $("#dlg").showModal();
 }

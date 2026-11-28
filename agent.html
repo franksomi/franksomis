@@ -5,33 +5,76 @@
 <link rel="icon" href="media/emblem.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap"><link rel="stylesheet" href="web.css">
 <link rel="manifest" href="site.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"></head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
-<section class="shophead"><div class="wrap"><span class="kicker">Referral agents</span><h1 style="font-size:clamp(1.8rem,5vw,2.6rem)">Your agent statement</h1><p>Enter your referral code and the phone number we have for you to see your customers and commission.</p></div></section>
+<section class="shophead"><div class="wrap"><span class="kicker">Referral agents</span><h1 style="font-size:clamp(1.8rem,5vw,2.6rem)">Your agent statement</h1><p>Sign in with your phone number to see your customers, sales and commission.</p></div></section>
 <main id="main" class="wrap" style="padding:30px 18px 70px;max-width:820px">
-  <form class="card noprint" id="f"><div class="trackbox" style="margin-top:0"><input name="code" placeholder="Your referral code" required aria-label="Referral code" autocomplete="off" style="text-transform:uppercase"><input name="phone" type="tel" placeholder="Your phone number" required aria-label="Phone number" autocomplete="tel"><button class="btn" type="submit">Show</button></div><p class="msg bad" id="err" role="alert" style="margin:10px 0 0"></p></form>
+  <form class="card noprint" id="lf"><h3 style="margin-top:0">Sign in</h3><div class="trackbox" style="margin-top:0"><input name="phone" type="tel" placeholder="Your phone number" required aria-label="Phone number" autocomplete="username"><input name="pw" type="password" placeholder="Password" required aria-label="Password" autocomplete="current-password"><button class="btn" type="submit">Sign in</button></div><p class="msg" id="lerr" style="color:#b42318;min-height:1.2em"></p><p style="color:var(--mut)"><small>First time? We send you a temporary password by SMS. You will choose your own password straight away. Ask us on 0711 952 924 if you have not received it.</small></p></form>
+  <form class="card noprint" id="gf" hidden><h3 style="margin-top:0">Choose your own password</h3><p>Hello <b id="gwho"></b>. Before you start, set a password only you know.</p><div class="trackbox" style="margin-top:0"><input name="p" type="password" placeholder="New password (8 or more characters)" required minlength="8" autocomplete="new-password" aria-label="New password"><input name="q" type="password" placeholder="Type it again" required minlength="8" autocomplete="new-password" aria-label="New password again"><button class="btn" type="submit">Save and continue</button></div><p class="msg" id="gerr" style="color:#b42318;min-height:1.2em"></p></form>
+  <div class="noprint" id="bar" hidden style="text-align:right;margin-bottom:10px"><button class="btn ghost" id="so" type="button">Sign out</button></div>
+  <details id="old" class="card noprint" style="margin-top:14px"><summary style="cursor:pointer"><b>No login yet? Look up with your referral code</b></summary>
+<form id="f" style="margin-top:12px"><div class="trackbox" style="margin-top:0"><input name="code" placeholder="Your referral code" required aria-label="Referral code" autocomplete="off" style="text-transform:uppercase"><input name="phone" type="tel" placeholder="Your phone number" required aria-label="Phone number" autocomplete="tel"><button class="btn" type="submit">Show</button></div><p class="msg bad" id="err" role="alert" style="margin:10px 0 0"></p></form>
+  </details>
   <div id="out" hidden></div>
 </main>
 <div id="siteFooter"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script><script src="idle.js"></script>
 <script>
 (function(){
-  var E=WEB.esc,K=WEB.kes,$=WEB.$;WEB.chrome("shop.html");
+  var E=WEB.esc,$=WEB.$,K=function(v){return Number(v||0).toLocaleString("en-KE",{minimumFractionDigits:0,maximumFractionDigits:2})};WEB.chrome("shop.html");
   var rule=function(a){return a.mode==="percent"?K(a.rate)+"% of each sale":a.mode==="profit"?K(a.rate)+"% of the profit on each sale":"Tiered: the rate rises with the month's "+(a.basis==="profit"?"profit":"sales")+" ("+(a.tiers||[]).map(function(t){return K(t.rate)+"% from KES "+K(t.from)}).join(", ")+")"};
+  // the signed-in agent uses its own browser session (kept for the day), separate from the public pages
+  var cfg=window.APP_CONFIG||{};
+  var adb=window.__MOCK_DB__||((cfg.SUPABASE_URL&&!/YOUR-/.test(cfg.SUPABASE_URL)&&window.supabase)?window.supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY,{auth:{persistSession:true,storageKey:"fk-agent-auth"}}):null);
+  var lastPw="";
+  var phoneToEmail=function(p){var d=String(p||"").replace(/\D/g,"");if(/^0[17]\d{8}$/.test(d))d="254"+d.slice(1);else if(/^[17]\d{8}$/.test(d))d="254"+d;return /^254[17]\d{8}$/.test(d)?"a"+d+"@agents.franksomi.com":null};
+  function view(which){$("#lf").hidden=which!=="login";$("#gf").hidden=which!=="gate";$("#bar").hidden=which!=="in";$("#old").hidden=which!=="login";if(which!=="in")$("#out").hidden=true}
+  function show(a,priceFn){
+    var link=location.origin+location.pathname.replace(/[^\/]*$/,"")+"shop.html?ref="+encodeURIComponent(a.code);
+    var rows=(a.recent||[]).map(function(x){return '<tr><td>'+E(x.on)+'</td><td>'+E(x.ref||"")+'</td><td style="text-align:right">'+K(x.revenue)+'</td><td style="text-align:right">'+K(x.amount)+'</td><td>'+(x.status==="Paid"?"Paid":"Owed")+'</td></tr>'}).join("");
+    $("#out").innerHTML='<div class="card"><h3 style="margin-top:0">Hello '+E(a.name.split(" ")[0])+'</h3><p>Your referral code is <b style="font-size:1.3em;letter-spacing:.06em">'+E(a.code)+'</b><br>Commission: '+E(rule(a))+'</p>'+
+      '<div class="sumrow"><span>Customers you brought</span><b>'+Number(a.customers)+'</b></div><div class="sumrow"><span>Sales through you</span><b>KES '+K(a.sales)+'</b></div><div class="sumrow"><span>Commission owed to you</span><b>KES '+K(a.owed)+'</b></div><div class="sumrow t"><span>Commission paid to you</span><b>KES '+K(a.paid)+'</b></div>'+
+      (Number(a.tax)>0?'<div class="sumrow"><span>Of which withholding tax held back</span><b>KES '+K(a.tax)+'</b></div>':'')+
+      '<p style="color:var(--mut)"><small>Your link to share: <br><span style="word-break:break-all">'+E(link)+'</span></small></p></div>'+
+      '<div class="card" style="margin-top:16px"><h3 style="margin-top:0">Recent sales</h3>'+((a.recent||[]).length?'<div class="tablewrap"><table><thead><tr><th>Date</th><th>Reference</th><th style="text-align:right">Sale</th><th style="text-align:right">Your commission</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<p>No sales yet. Share your code or link with customers. Commission is added when their order, repair or job is complete and paid.</p>')+'</div>';
+    if(a.prices&&priceFn){$("#out").insertAdjacentHTML("afterbegin",'<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">Check a price</h3><input id="pq" type="search" placeholder="Type an item or service, e.g. keyboard" aria-label="Item or service to price" autocomplete="off" style="width:100%"><div id="pr" style="margin-top:10px"></div></div>');
+      var tm=0;$("#pq").oninput=function(){clearTimeout(tm);var q=this.value;tm=setTimeout(async function(){var box=$("#pr");if(q.trim().length<2){box.innerHTML="";return}
+        var x=await priceFn(q);var d=x.data||{};
+        if(x.error||!d.ok){box.innerHTML='<p style="color:#b42318">'+(d.error==="too_many"?"Slow down a little, then try again.":"Price check is not available for you right now.")+'</p>';return}
+        box.innerHTML=(d.items||[]).length?'<div class="tablewrap"><table><thead><tr><th>Item</th><th style="text-align:right">Price (KES)</th><th>Stock</th></tr></thead><tbody>'+d.items.map(function(i){return '<tr><td>'+E(i.name)+(i.unit?' <small>per '+E(i.unit)+'</small>':'')+'</td><td style="text-align:right"><b>'+K(i.price)+'</b></td><td>'+(i.kind==="Service"?"":i.in_stock?"In stock":"Ask us")+'</td></tr>'}).join("")+'</tbody></table></div>':'<p>Nothing found. Try another word, or ask us.</p>'},300)}}
+    $("#out").hidden=false}
+  async function enter(){
+    if(!adb||!adb.auth){view("login");return}
+    var s=await adb.auth.getSession();if(!s.data||!s.data.session){view("login");return}
+    if(window.IDLE&&IDLE.stale()){await adb.auth.signOut();view("login");$("#lerr").textContent="You were signed out after 24 hours of no activity. Please sign in again.";return}
+    var me=(await adb.rpc("agent_me")).data;
+    if(!me||!me.ok||me.active===false){await adb.auth.signOut();view("login");$("#lerr").textContent="This sign-in is not an agent login, or it is switched off. Please call 0711 952 924.";return}
+    if(window.IDLE)IDLE.start(adb,function(){view("login");$("#lerr").textContent="You were signed out after 24 hours of no activity. Please sign in again."});
+    if(me.must_change){$("#gwho").textContent=me.name;$("#gerr").textContent="";view("gate");return}
+    var r=await adb.rpc("agent_portal");if(r.error||!r.data||!r.data.ok){view("login");$("#lerr").textContent="We could not load your statement. Please try again.";return}
+    view("in");show(r.data,function(q){return adb.rpc("agent_portal_prices",{p_q:q})})}
+  $("#lf").onsubmit=async function(e){e.preventDefault();var f=e.target,err=$("#lerr");err.textContent="";
+    var em=phoneToEmail(f.phone.value);if(!adb||!adb.auth){err.textContent="This page is not switched on yet. Please call 0711 952 924.";return}
+    if(!em){err.textContent="Enter your phone number, for example 0712 345 678.";return}
+    var b=f.querySelector("button");b.disabled=true;var r=await adb.auth.signInWithPassword({email:em,password:f.pw.value});b.disabled=false;
+    if(r.error){err.textContent="Wrong phone number or password.";return}
+    lastPw=f.pw.value;try{localStorage.setItem("fk_last_active",String(Date.now()))}catch(x){}f.reset();enter()};
+  $("#gf").onsubmit=async function(e){e.preventDefault();var f=e.target,err=$("#gerr"),p=f.p.value;
+    if(p!==f.q.value){err.textContent="The two passwords are not the same.";return}
+    if(p.length<8){err.textContent="Use at least 8 characters.";return}
+    if(lastPw&&p===lastPw){err.textContent="Choose a different password from the temporary one.";return}
+    if(/^(12345678|password|qwerty12|11111111)/i.test(p)){err.textContent="That password is too easy to guess.";return}
+    err.textContent="Saving\u2026";var u=await adb.auth.updateUser({password:p});
+    if(u.error){err.textContent=/same|different/i.test(u.error.message)?"Choose a different password from the temporary one.":u.error.message;return}
+    var ok=await adb.rpc("agent_password_changed");if(ok.error||ok.data!==true){err.textContent="Your password was not saved. Please try again.";return}
+    lastPw="";f.reset();enter()};
+  $("#so").onclick=async function(){if(window.IDLE)IDLE.stop();await adb.auth.signOut();view("login")};
+  // no login yet: the older lookup with the referral code and the phone number we hold
   $("#f").onsubmit=async function(e){e.preventDefault();var f=e.target,err=$("#err");err.textContent="";$("#out").hidden=true;
     if(!WEB.db){err.textContent="This page is not switched on yet. Please call 0711 952 924.";return}
     var b=f.querySelector("button");b.disabled=true;
     var r=await WEB.db.rpc("agent_statement",{p_code:f.code.value,p_phone:f.phone.value});b.disabled=false;var a=r.data||{};
     if(r.error||!a.ok){err.textContent=a.error==="too_many"?"Too many tries. Please try again later or call us.":"We could not find that agent. Check the code and the phone number we have for you.";return}
-    var link=location.origin+location.pathname.replace(/[^\/]*$/,"")+"shop.html?ref="+encodeURIComponent(a.code);
-    $("#out").innerHTML='<div class="card"><h3 style="margin-top:0">Hello '+E(a.name.split(" ")[0])+'</h3><p>Your referral code is <b style="font-size:1.3em;letter-spacing:.06em">'+E(a.code)+'</b><br>Commission: '+E(rule(a))+'</p>'+
-      '<div class="sumrow"><span>Customers you brought</span><b>'+Number(a.customers)+'</b></div><div class="sumrow"><span>Sales through you</span><b>KES '+K(a.sales)+'</b></div><div class="sumrow"><span>Commission owed to you</span><b>KES '+K(a.owed)+'</b></div><div class="sumrow t"><span>Commission paid to you</span><b>KES '+K(a.paid)+'</b></div>'+
-      '<p style="color:var(--mut)"><small>Your link to share: <br><span style="word-break:break-all">'+E(link)+'</span></small></p></div>'+
-      '<div class="card" style="margin-top:16px"><h3 style="margin-top:0">Recent sales</h3>'+((a.recent||[]).length?'<div class="tablewrap"><table><thead><tr><th>Date</th><th>Reference</th><th style="text-align:right">Sale</th><th style="text-align:right">Your commission</th><th>Status</th></tr></thead><tbody>'+a.recent.map(function(x){return '<tr><td>'+E(x.on)+'</td><td>'+E(x.ref||"")+'</td><td style="text-align:right">'+K(x.revenue)+'</td><td style="text-align:right">'+K(x.amount)+'</td><td>'+(x.status==="Paid"?"Paid":"Owed")+'</td></tr>'}).join("")+'</tbody></table></div>':'<p>No sales yet. Share your code or link with customers. Commission is added when their order, repair or job is complete and paid.</p>')+'</div>';
-    if(a.prices){$("#out").insertAdjacentHTML("afterbegin",'<div class="card" style="margin-bottom:16px"><h3 style="margin-top:0">Check a price</h3><input id="pq" type="search" placeholder="Type an item or service, e.g. keyboard" aria-label="Item or service to price" autocomplete="off" style="width:100%"><div id="pr" style="margin-top:10px"></div></div>');
-      var tm=0,code=f.code.value,phone=f.phone.value;$("#pq").oninput=function(){clearTimeout(tm);var q=this.value;tm=setTimeout(async function(){var box=$("#pr");if(q.trim().length<2){box.innerHTML="";return}
-        var x=await WEB.db.rpc("agent_price_search",{p_code:code,p_phone:phone,p_q:q});var d=x.data||{};
-        if(x.error||!d.ok){box.innerHTML='<p style="color:#b42318">'+(d.error==="too_many"?"Slow down a little, then try again.":"Price check is not available for you right now.")+'</p>';return}
-        box.innerHTML=(d.items||[]).length?'<div class="tablewrap"><table><thead><tr><th>Item</th><th style="text-align:right">Price (KES)</th><th>Stock</th></tr></thead><tbody>'+d.items.map(function(i){return '<tr><td>'+E(i.name)+(i.unit?' <small>per '+E(i.unit)+'</small>':'')+'</td><td style="text-align:right"><b>'+K(i.price)+'</b></td><td>'+(i.kind==="Service"?"":i.in_stock?"In stock":"Ask us")+'</td></tr>'}).join("")+'</tbody></table></div>':'<p>Nothing found. Call us on 0711 952 924.</p>'},300)}}
-    $("#out").hidden=false};
+    var code=f.code.value,phone=f.phone.value;show(a,function(q){return WEB.db.rpc("agent_price_search",{p_code:code,p_phone:phone,p_q:q})})};
+  enter();
 })();
 </script>
 </body></html>

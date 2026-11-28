@@ -1999,11 +1999,13 @@ async function route() {
 async function start() {
   const { data: { session } } = await db.auth.getSession();
   if (!session) { $("#app").hidden = true; $("#login").hidden = false; $("#gateForm").hidden = true; $("#loginForm").hidden = false; return; }
+  if (window.IDLE && IDLE.stale()) { await db.auth.signOut(); $("#app").hidden = true; $("#login").hidden = false; $("#gateForm").hidden = true; $("#loginForm").hidden = false; $("#loginMsg").textContent = "You were signed out after 24 hours of no activity. Please sign in again."; return; }
   const acc = await db.rpc("my_access");
   me = acc.data;
   if (me && me.active && me.must_change) return passwordGate(session);
   if (!me || !me.active) { await db.auth.signOut(); $("#app").hidden = true; $("#login").hidden = false; $("#gateForm").hidden = true; $("#loginForm").hidden = false; $("#loginMsg").textContent = "This account is switched off. Ask the owner."; return; }
   me.full_name = me.name;
+  if (window.IDLE) IDLE.start(db, () => { location.hash = ""; start().then(() => { $("#loginMsg").textContent = "You were signed out after 24 hours of no activity. Please sign in again."; }); });
   $("#login").hidden = true; $("#app").hidden = false; $("#gateForm").hidden = true; $("#loginForm").hidden = false;
   $("#who").textContent = `${me.full_name || session.user.email} · ${roleName(me.role)}`;
   $("#nav").innerHTML = navFor().map(([k, l]) => `<a href="#${k}" data-k="${k}">${BRAND.icon(k, 17)}${esc(l)}</a>`).join("");
@@ -2028,8 +2030,8 @@ $("#gateForm").onsubmit = async e => { e.preventDefault(); const f = e.target, m
   lastLoginPw = ""; start(); };
 $("#gateOut").onclick = async () => { await db.auth.signOut(); lastLoginPw = ""; start(); };
 $("#loginForm").onsubmit = async e => { e.preventDefault(); const f = e.target; const r = await db.auth.signInWithPassword({ email: f.email.value, password: f.password.value });
-  if (r.error) $("#loginMsg").textContent = "Wrong email or password."; else { $("#loginMsg").textContent = ""; lastLoginPw = f.password.value; start(); } };
-$("#logout").onclick = async () => { clearInterval(window.__beat); await db.auth.signOut(); location.hash = ""; start(); };
+  if (r.error) $("#loginMsg").textContent = "Wrong email or password."; else { $("#loginMsg").textContent = ""; lastLoginPw = f.password.value; try { localStorage.setItem("fk_last_active", String(Date.now())); } catch (_) {} start(); } };
+$("#logout").onclick = async () => { if (window.IDLE) IDLE.stop(); clearInterval(window.__beat); await db.auth.signOut(); location.hash = ""; start(); };
 // a sign-in link that is expired or already used comes back with an error in the address
 if (/error_description|otp_expired|access_denied/.test(location.hash)) { $("#loginMsg").textContent = "That sign-in link has expired or was already used. Ask the owner to send you a new one."; history.replaceState(null, "", location.pathname); }
 window.addEventListener("hashchange", () => me && route());
