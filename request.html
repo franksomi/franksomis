@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Request an item or service | Franksomi Solution Ltd</title><meta name="description" content="Cannot find what you need? Tell Franksomi Solution Ltd what you are looking for and we will message you when it is available."><meta name="theme-color" content="#0E152B">
+<link rel="icon" href="media/emblem.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700;800&display=swap"><link rel="stylesheet" href="web.css">
+<link rel="manifest" href="site.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"></head><body><a class="skip" href="#main">Skip to content</a><div id="siteHeader"></div>
+
+<section class="shophead"><div class="wrap"><span class="kicker">Requests</span><h1 style="font-size:clamp(1.8rem,5vw,2.6rem)">Cannot find it? Tell us.</h1><p>Ask for an item or a service we do not have right now. We will message you when it is available. You can also put down a small deposit to reserve it.</p></div></section>
+<main id="main" class="wrap" style="padding:30px 18px 70px;max-width:760px">
+  <form class="card" id="f" novalidate>
+    <div class="trackbox" style="margin-top:0"><input name="name" placeholder="Your name" required maxlength="80" aria-label="Your name" autocomplete="name"><input name="phone" type="tel" placeholder="Your phone (07XX XXX XXX)" required aria-label="Your phone number" autocomplete="tel"></div>
+    <div class="trackbox" style="margin-top:10px"><select name="kind" aria-label="Item or service"><option value="Item">An item</option><option value="Service">A service</option></select><input name="item" placeholder="What are you looking for? e.g. HP 305 ink" required maxlength="120" aria-label="What you are looking for"></div>
+    <div class="trackbox" style="margin-top:10px"><input name="qty" type="number" min="1" max="1000" step="1" value="1" aria-label="How many"><input name="budget" type="number" min="0" step="1" placeholder="Your budget in KES (optional)" aria-label="Budget"></div>
+    <div class="trackbox" style="margin-top:10px"><input name="note" placeholder="Anything else we should know (optional)" maxlength="400" aria-label="Note"></div>
+    <div class="trackbox" style="margin-top:10px"><input name="deposit" type="number" min="50" max="10000" step="1" placeholder="Reserve it with a deposit in KES (optional, 50 to 10,000)" aria-label="Deposit in shillings"></div>
+    <p style="margin:6px 0 0"><small style="color:var(--mut)">A deposit is paid by M-Pesa prompt to the number above and held for you. It counts toward the price when you buy, or we refund it if we cannot supply.</small></p>
+    <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+    <label style="display:flex;gap:10px;align-items:flex-start;margin:16px 0 0"><input type="checkbox" name="consent" style="width:auto;margin-top:4px"><span>I agree that Franksomi Solution Ltd may contact me by SMS on this number about this request.</span></label>
+    <div class="trackbox"><button class="btn green" id="go" type="submit">Send my request</button></div>
+    <p class="msg" id="msg" role="status" aria-live="polite"></p>
+  </form>
+  <div id="out" hidden class="card" style="margin-top:16px"></div>
+</main>
+<div id="siteFooter"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="web.js"></script>
+<script>
+(function(){
+  var E=WEB.esc,K=WEB.kes,$=WEB.$,busy=false;WEB.chrome("request.html");
+  var ERR={name:"Please enter your name.",phone:"Please enter a valid Safaricom or Airtel mobile number.",item:"Please say what you are looking for.",consent:"Please tick the box so we may message you.",qty:"Please enter how many you need.",budget:"Please check the budget amount.",deposit:"A deposit must be a whole amount from KES 50 to KES 10,000.",too_many:"Too many requests from this device. Please try again later or call 0711 952 924.",duplicate:"We already have this request from your number. We will message you when it is available.",bad_request:"Something was missing. Please check the form."};
+  function say(t,bad){var m=$("#msg");m.textContent=t||"";m.style.color=bad?"#b42318":""}
+  $("#f").onsubmit=async function(e){e.preventDefault();if(busy)return;var f=e.target;say("");
+    if(!WEB.db){say("This page is not switched on yet. Please call 0711 952 924.",1);return}
+    var dep=f.deposit.value.trim();
+    if(!f.name.value.trim()){say(ERR.name,1);return}
+    if(!f.phone.value.trim()){say(ERR.phone,1);return}
+    if(!f.item.value.trim()){say(ERR.item,1);return}
+    if(!f.consent.checked){say(ERR.consent,1);return}
+    busy=true;$("#go").disabled=true;say("Sending your request…");
+    try{
+      var r=await WEB.db.rpc("request_add_public",{p:{name:f.name.value,phone:f.phone.value,kind:f.kind.value,item:f.item.value,qty:f.qty.value,budget:f.budget.value,note:f.note.value,consent:true,deposit:dep,website:f.website.value}});
+      var d=r.data||{};
+      if(r.error||!d.ok){say(ERR[d.error]||"We could not save your request. Please call 0711 952 924.",1);return}
+      var ref=d.ref,paid=false,msg="";
+      if(Number(d.deposit)>0){
+        say("Sending the deposit prompt to your phone…");
+        var p=await WEB.payOrder(ref,f.phone.value,Number(d.deposit),function(t){say(t)});
+        paid=p.ok&&!p.review;msg=p.ok?(p.review?"Your payment was received but needs checking by our team. We will contact you.":""):(p.message||"");
+      }
+      f.hidden=true;var o=$("#out");o.hidden=false;
+      o.innerHTML='<h3 style="margin-top:0">Thank you. Your request is in.</h3><p>Your reference is <b>'+E(ref)+'</b>. We will send you an SMS as soon as it is available.</p>'+
+        (Number(d.deposit)>0?(paid?'<p><b>Deposit of '+K(d.deposit)+' received.</b> It is held for you and counts toward the price.</p>':'<p style="color:#b54708">'+E(msg||"The deposit was not paid.")+' Your request is saved without a deposit. You can pay it at the shop or call 0711 952 924 quoting '+E(ref)+'.</p>'):"")+
+        '<p><a class="btn" href="request.html">Make another request</a></p>';
+      say("");
+    }catch(x){say("Something went wrong. Please try again or call 0711 952 924.",1)}finally{busy=false;$("#go").disabled=false}};
+})();
+</script><script>if("serviceWorker" in navigator && location.protocol.startsWith("http")) addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script></body></html>

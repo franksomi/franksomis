@@ -68,7 +68,7 @@ const T = {
       ["amount", "Amount (KES)", "number", { req: 1 }], ["payment", "Payment method", "select:" + PAY.join()], ["mpesa_ref", "M-Pesa code", "text"], ["job_no", "Job No. (optional)", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   services: { title: "Printing & Cyber", view: "services", perm: "services", table: "services", order: "id", quick: 1,
     cols: [["done_on", "Date"], ["service", "Service"], ["customer", "Customer"], ["qty", "Qty", "n"], ["unit_price", "Price", "n"], ["total", "Total", "n"], ["payment", "Payment"], ["account_id", "Account", "acct"], ["mpesa_ref", "M-Pesa code"]],
-    fields: [["done_on", "Date", "date", { today: 1 }], ["service", "Service", "service"], ["customer", "Customer (optional)", "text"], ["qty", "Qty (pages, minutes ÷ 30, items)", "number", { req: 1 }],
+    fields: [["done_on", "Date", "date", { today: 1 }], ["service", "Service", "service"], ["customer", "Customer (optional)", "text"], ["cust_phone", "Customer phone (optional: earns loyalty points · M-Pesa prompt goes here)", "text"], ["agent_code", "Referral code (if an agent brought this customer)", "text"], ["qty", "Qty (pages, minutes ÷ 30, items)", "number", { req: 1 }],
       ["unit_price", "Price each (KES)", "number", { req: 1 }], ["payment", "Payment method", "select:" + PAYX.join()], ["account_id", "Credit account (choose when payment is On account)", "account"], ["mpesa_ref", "M-Pesa code (if paid by M-Pesa)", "text"], ["notes", "Notes", "text", { full: 1 }]] },
   enquiries: { title: "Website enquiries", view: "enquiries", perm: "orders", table: "enquiries", order: "id",
     cols: [["created_at", "Received", "dt"], ["name", "Name"], ["phone", "Phone"], ["topic", "About"], ["message", "Message"], ["status", "Status"], ["source", "From"]],
@@ -78,7 +78,7 @@ const T = {
     cols: [["name", "Supplier"], ["contact_person", "Contact person"], ["phone", "Phone"], ["location", "Location"], ["supplies", "What they supply"]],
     fields: [["name", "Supplier name", "text", { req: 1 }], ["contact_person", "Contact person", "text"], ["phone", "Phone", "text"], ["location", "Location", "text"], ["supplies", "What they supply", "text", { full: 1 }], ["notes", "Notes", "text", { full: 1 }]] },
 };
-const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
+const NAV = [["dashboard", "Dashboard"], ["repairs", "Repairs", "repairs.view"], ["sales", "Sales", "sales.view"], ["orders", "Shop orders", "orders.view"], ["enquiries", "Enquiries", "orders.view"], ["requests", "Customer requests", "requests.view"], ["chat", "Live chat", "chat.use"], ["accounts", "Credit accounts", "accounts.view"], ["services", "Printing & Cyber", "services.view"], ["jobs", "Field Jobs", "jobs.view"],
   ["docs", "Quotes / Invoices / Receipts", "docs.view"], ["contracts", "Contracts", "docs.view"], ["unpaid", "Unpaid invoices", "docs.view"], ["airtime", "Airtime", "airtime.sell"], ["loyalty", "Loyalty points", "loyalty.use"], ["agents", "Agents", "agents.view"], ["quotes", "Open quotes", "docs.view"], ["equipment", "Client equipment", "equipment.view"], ["till", "Till payments", "income.add"], ["wifi", "Landlord WiFi", "reports.view"], ["income", "Income", "income.view"], ["expenses", "Expenses", "expenses.view"], ["staffpay", "Staff pay", "payroll.manage"], ["inventory", "Inventory", "inventory.view"],
   ["mpay", "M-Pesa checkout", "mpay.use"], ["sms", "SMS messages", "sms.manage"], ["health", "Business health", "finance.view+costs.view"], ["assets", "Assets", "finance.view"], ["money", "Money & loans", "finance.view"], ["eod", "End of day", "eod.view"], ["monthly", "Monthly report", "reports.view+costs.view"], ["summary", "Year summary", "reports.view+costs.view"],
   ["mpesa", "M-Pesa reconcile", "reconcile.use"], ["suppliers", "Suppliers"], ["payables", "Supplier payables", "payables.view"], ["lists", "Lists", "lists.manage"], ["zones", "Delivery areas", "shop.manage"], ["audit", "Activity log", "audit.view"], ["vault", "Company documents", "vault.manage"], ["projects", "Website projects", "projects.manage"], ["policies", "Website text & hours", "settings.manage"], ["users", "Users & roles", "users.manage"]];
@@ -172,7 +172,7 @@ async function openForm(key, row) {
   const def = T[key];
   await refreshLookups();
   if (key === "repairs" && row) row = { ...row, ...(await repairChecks(row.id)) };
-  const LEAD = { sales: "sale", repairs: "repair", jobs: "job" }[key];
+  const LEAD = { sales: "sale", services: "service", repairs: "repair", jobs: "job" }[key];
   if (LEAD && row) { let lr = null; try { const lq = await db.from("lead_links").select("code,phone").eq("source", LEAD).eq("source_id", row.id).limit(1); lr = lq.data && (Array.isArray(lq.data) ? lq.data[0] : lq.data); } catch (_) {} row = { ...row, agent_code: lr && lr.code || "", cust_phone: lr && lr.phone ? "0" + lr.phone.slice(3) : "" }; }
   const oldItems = key === "repairs" && row ? await repairItems(row.id) : [];
   const dlg = $("#dlg"), f = $("#dlgForm");
@@ -182,6 +182,7 @@ async function openForm(key, row) {
   wireLines(f, key);
   if (key === "sales") { const pf = f.elements.payment; if (pf && row) pf.dataset.v = row.payment || ""; wireSaleSplit(f, !row);
     if (!row && f.elements.receipt_no && !f.elements.receipt_no.value) { const rn = await db.rpc("next_sale_receipt"); if (!rn.error && rn.data) f.elements.receipt_no.value = rn.data; } }
+  if (key === "services" && !row && f.elements.payment && f.elements.mpesa_ref) wireSalePrompt(f, f.elements.payment, () => Number(f.elements.qty.value || 0) * Number(f.elements.unit_price.value || 0), { ref: "Print/Cyber", purpose: "Printing & Cyber" });
   f.oninput = f.onchange = f.onclick = null;
   const pasteFix = mpesaPasteFix(f); let billFn = null;
   if (key === "income" && !row) wireIncomeFill(f);
@@ -195,7 +196,7 @@ async function openForm(key, row) {
     if (xl.error) return toast(xl.error);
     const leadCode = (data.agent_code || "").trim().toUpperCase().replace(/\s+/g, ""), leadPhone = (data.cust_phone || "").trim();
     delete data.agent_code; delete data.cust_phone;
-    const leadWas = row ? { code: (row.agent_code || "").toUpperCase(), phone: row.cust_phone || "" } : { code: "", phone: "" }, leadChanged = leadCode !== leadWas.code || (key === "sales" && leadPhone !== leadWas.phone);
+    const leadWas = row ? { code: (row.agent_code || "").toUpperCase(), phone: row.cust_phone || "" } : { code: "", phone: "" }, leadChanged = leadCode !== leadWas.code || ((key === "sales" || key === "services") && (leadPhone !== leadWas.phone || (key === "services" && !!leadPhone)));
     if (LEAD && leadCode && leadChanged) { const ck = await db.rpc("agent_code_ok", { p_code: leadCode }); if (ck.error || !ck.data) return toast("The referral code " + leadCode + " is not an active agent's code. Check it, or clear the box."); }
     const checks = key === "repairs" ? { left_with: data.left_with || [], condition: data.condition || [] } : null;
     const alt = key === "repairs" ? { alt_name: data.alt_name || null, alt_phone: data.alt_phone || null } : null;
@@ -236,7 +237,7 @@ async function openForm(key, row) {
     if (row && (!r.data || !r.data.length)) return toast("You can't change this record. Staff can fix only their own entries, within a day.");
     if (LEAD && leadChanged) {
       const ids = row ? [row.id] : (Array.isArray(r.data) ? r.data.map(x => x.id) : [r.data && r.data.id]).filter(Boolean);
-      for (const id of ids) { const la = await db.rpc("lead_attach", { p_source: LEAD, p_id: id, p_code: leadCode || null, p_phone: key === "sales" ? (leadPhone || null) : null }); if (la.error) { toast("Saved, but the referral code / phone was not: " + la.error.message); dlg.close(); route(); return; } }
+      for (const id of ids) { const la = await db.rpc("lead_attach", { p_source: LEAD, p_id: id, p_code: leadCode || null, p_phone: key === "sales" || key === "services" ? (leadPhone || null) : null }); if (la.error) { toast("Saved, but the referral code / phone was not: " + la.error.message); dlg.close(); route(); return; } }
     }
     if (checks) {
       const rid = row ? row.id : (Array.isArray(r.data) ? r.data[0]?.id : r.data?.id);
@@ -388,7 +389,7 @@ function wireSaleSplit(f, isNew) {
   if (isNew && f.elements.mpesa_ref) wireSalePrompt(f, pay, total);
 }
 // M-Pesa prompt inside the new-sale form: sends the STK prompt, waits for the customer's PIN, and fills in the M-Pesa code when paid
-function wireSalePrompt(f, pay, total) {
+function wireSalePrompt(f, pay, total, opt = {}) {
   const codeLbl = f.elements.mpesa_ref.closest("label"); if (!codeLbl) return;
   codeLbl.insertAdjacentHTML("afterend", `<div class="full" id="salePrompt" hidden style="border:1px solid var(--line,#ddd);border-radius:10px;padding:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end">
     <label>Customer phone<input id="spPhone" inputmode="tel" placeholder="07XX XXX XXX"></label>
@@ -405,7 +406,7 @@ function wireSalePrompt(f, pay, total) {
     msg.style.color = ""; if (!phone) { msg.style.color = "#b42318"; msg.textContent = "Type the customer's phone number."; return; } if (!(n >= 1)) { msg.style.color = "#b42318"; msg.textContent = "Enter the amount to request."; return; }
     busy = true; send.disabled = true; msg.textContent = "Sending…";
     let provider; try { const p = await db.functions.invoke("stk-push", { body: { action: "providers" } }); provider = p.data && p.data.default; } catch (_) {}
-    const body = { phone, amount: n, ref: (f.elements.receipt_no && f.elements.receipt_no.value || "Sale").slice(0, 20), purpose: "Shop sale", auto_record: false, customer_name: f.elements.customer ? f.elements.customer.value : "" }; if (provider) body.provider = provider;
+    const body = { phone, amount: n, ref: (f.elements.receipt_no && f.elements.receipt_no.value || opt.ref || "Sale").slice(0, 20), purpose: opt.purpose || "Shop sale", auto_record: false, customer_name: f.elements.customer ? f.elements.customer.value : "" }; if (provider) body.provider = provider;
     const res = await db.functions.invoke("stk-push", { body });
     if (res.error || !res.data || !res.data.ok) { msg.style.color = "#b42318"; msg.textContent = await invokeErr(res); busy = false; send.disabled = false; return; }
     msg.textContent = "Prompt sent. Ask the customer to check their phone and enter their PIN…"; const id = res.data.public_id;
@@ -1993,7 +1994,7 @@ async function route() {
   if (nv && nv[2] && !can(nv[2]) && !(k === "suppliers")) { $("#view").innerHTML = `<h2>Not allowed</h2><p>Your role (${esc(roleName(me.role))}) does not include this page. Ask the owner if you need it.</p>`; return; }
   const decorate = () => { const h = document.querySelector("#view > h2"); if (h) { const w = document.createElement("div"); w.className = "pagehead"; w.innerHTML = BRAND.icon(k, 22); h.replaceWith(w); w.appendChild(h); } };
   try { if (k === "dashboard") await dashboard(); else if (k === "lists") await listsPage(); else if (k === "docs") await docsPage(); else if (k === "eod") await eodPage(); else if (k === "monthly") await monthlyPage(); else if (k === "summary") await summaryPage();
-    else if (k === "contracts") await contractsPage(); else if (k === "unpaid") await unpaidPage(); else if (k === "loyalty" || k === "agents") { if (typeof loyaltyPage !== "function") $("#view").innerHTML = '<div class="card"><h2>Page file missing</h2><p>The website host does not have the new file <b>loyalty.js</b> (or an old copy is cached). Upload every file from the v35 <b>site</b> folder, including <b>loyalty.js</b> and <b>kopokopo.js</b>, then press Ctrl+F5.</p></div>'; else if (k === "loyalty") await loyaltyPage(); else await agentsPage(); } else if (k === "airtime") { if (typeof airtimePage !== "function") $("#view").innerHTML = '<div class="card"><h2>Page file missing</h2><p>The website host does not have the new file <b>airtime.js</b> (or an old copy is cached). Upload every file from the v37 <b>site</b> folder, then press Ctrl+F5.</p></div>'; else await airtimePage(); } else if (k === "health") await healthPage(); else if (k === "assets") await assetsPage(); else if (k === "money") await moneyPage(); else if (k === "staffpay") await staffPayPage(); else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "equipment") await equipmentPage(); else if (k === "till") await tillPage(); else if (k === "wifi") await wifiPage(); else if (k === "vault") await vaultPage(); else if (k === "projects") await projectsPage(); else if (k === "policies") await policiesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
+    else if (k === "contracts") await contractsPage(); else if (k === "unpaid") await unpaidPage(); else if (k === "requests") { if (typeof requestsPage !== "function") $("#view").innerHTML = '<div class="card"><h2>Page file missing</h2><p>Upload <b>requests.js</b> from the v40 <b>site</b> folder, then press Ctrl+F5.</p></div>'; else await requestsPage(); } else if (k === "loyalty" || k === "agents") { if (typeof loyaltyPage !== "function") $("#view").innerHTML = '<div class="card"><h2>Page file missing</h2><p>The website host does not have the new file <b>loyalty.js</b> (or an old copy is cached). Upload every file from the v35 <b>site</b> folder, including <b>loyalty.js</b> and <b>kopokopo.js</b>, then press Ctrl+F5.</p></div>'; else if (k === "loyalty") await loyaltyPage(); else await agentsPage(); } else if (k === "airtime") { if (typeof airtimePage !== "function") $("#view").innerHTML = '<div class="card"><h2>Page file missing</h2><p>The website host does not have the new file <b>airtime.js</b> (or an old copy is cached). Upload every file from the v37 <b>site</b> folder, then press Ctrl+F5.</p></div>'; else await airtimePage(); } else if (k === "health") await healthPage(); else if (k === "assets") await assetsPage(); else if (k === "money") await moneyPage(); else if (k === "staffpay") await staffPayPage(); else if (k === "mpesa") await mpesaPage(); else if (k === "mpay") await mpayPage(); else if (k === "sms") await smsPage(); else if (k === "orders") await ordersPage(); else if (k === "accounts") await accountsPage(); else if (k === "quotes") await quotesPage(); else if (k === "equipment") await equipmentPage(); else if (k === "till") await tillPage(); else if (k === "wifi") await wifiPage(); else if (k === "vault") await vaultPage(); else if (k === "projects") await projectsPage(); else if (k === "policies") await policiesPage(); else if (k === "payables") await payablesPage(); else if (k === "chat") await chatPage(); else if (k === "zones") await zonesPage(); else if (k === "audit") await auditPage(); else if (k === "users") await usersPage(); else if (T[k]) await tablePage(k); decorate(); } catch (e) { console.error(e); }
 }
 async function start() {
   const { data: { session } } = await db.auth.getSession();
